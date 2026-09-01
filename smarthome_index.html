@@ -1,0 +1,2560 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Smart Home — Sykhai</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+  :root{
+    --bg: #14181c;
+    --bg-elev: #1b2126;
+    --bg-elev-2: #222a30;
+    --line: #2c363d;
+    --text: #e9edf0;
+    --text-dim: #8f9ba3;
+    --accent: #e8a33d;
+    --accent-dim: #6b5324;
+    --accent-text: #1a1408;
+    --blue: #5aa9e6;
+    --green: #5fb87a;
+    --red: #e2685c;
+    --radius: 10px;
+  }
+  :root[data-theme="light"]{
+    --bg: #f4f5f7;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #eceff2;
+    --line: #dde2e7;
+    --text: #1a1f24;
+    --text-dim: #6b7580;
+    --accent: #c8791f;
+    --accent-dim: #f5deb8;
+    --accent-text: #ffffff;
+    --blue: #2f7bc4;
+    --green: #2f9155;
+    --red: #c8392c;
+  }
+  body{ transition: background .15s ease, color .15s ease; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0; overscroll-behavior-y:none;} /* stop iOS rubber-band bounce — that bounce is what detaches/jumps the fixed tabbar during fast scroll */
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans Lao', 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom)); /* room for bottom tab bar + home-indicator */
+  }
+  .wrap{ max-width: 820px; margin: 0 auto; padding: 22px 16px 60px; }
+
+  /* ---------- bottom tab bar ---------- */
+  .tabbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:60;
+    background: var(--bg-elev); border-top:1px solid var(--line);
+    display:flex; justify-content:center;
+    padding-bottom: env(safe-area-inset-bottom);
+    /* GPU-composite this layer so iOS Safari doesn't repaint it late during momentum
+       scroll — that late repaint is what shows up as the bar jumping/flickering */
+    transform: translateZ(0);
+    -webkit-transform: translate3d(0,0,0);
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .tabbar-inner{ display:flex; width:100%; max-width:820px; }
+  .tabbtn{
+    flex:1; border:none; background:transparent; color:var(--text-dim);
+    padding:12px 8px 10px; font-family:inherit; font-size:12.5px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .tabbtn .ic{ font-size:19px; }
+
+  /* ---------- drag-to-reorder handle (ແທນ ▲▼, ຄືກັນ Smart Life: ກົດຄ້າງແລ້ວລາກ) ---------- */
+  .drag-handle{
+    display:flex; align-items:center; justify-content:center; width:38px; height:38px;
+    color: var(--text-dim); font-size:20px; cursor:grab; touch-action:none; flex-shrink:0;
+    border-radius:8px; user-select:none; -webkit-user-select:none;
+  }
+  .drag-handle:active{ cursor:grabbing; color: var(--accent); }
+  .drag-row.dragging, .device-card.dragging{
+    box-shadow: 0 8px 22px rgba(0,0,0,.4); border-color: var(--accent); opacity:.95;
+  }
+  .tabbtn.active{ color: var(--accent); }
+
+  header.top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom: 18px; flex-wrap:wrap;}
+  header.top h1{ font-family:'Space Grotesk', sans-serif; font-size: 21px; font-weight:600; margin:0; letter-spacing:-0.01em; }
+  header.top .sub{ color: var(--text-dim); font-size: 13px; margin-top:3px;}
+
+  .btn{
+    appearance:none; border:1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+    padding: 9px 16px; border-radius: var(--radius); font-size: 14px; cursor:pointer;
+    font-family: inherit; transition: border-color .15s ease, background .15s ease;
+  }
+  .btn:hover{ border-color:#3a464e; background:#28323a; }
+  .btn-accent{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight:600; }
+  .btn-accent:hover{ background:#f0ae4c; border-color:#f0ae4c; }
+  .btn-ghost{ background:transparent; border-color:transparent; color:var(--text-dim); padding:6px 10px;}
+  .btn-ghost:hover{ color:var(--text); background: var(--bg-elev-2); }
+  .btn-danger{ color: var(--red); }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .icon-btn{
+    border:1px solid var(--line); background: var(--bg-elev-2); border-radius:999px; width:34px; height:34px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-dim); font-size:15px;
+    flex-shrink:0;
+  }
+  .icon-btn:hover{ color:var(--text); border-color:#3a464e; }
+  .icon-btn.on{ background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+  .toolbar{ display:flex; gap:10px; margin-bottom:18px; }
+
+  .empty{ border:1px dashed var(--line); border-radius: var(--radius); padding: 40px 20px; text-align:center; color: var(--text-dim); }
+  .empty b{ color: var(--text); display:block; font-size:16px; margin-bottom:6px; font-weight:600;}
+
+  .status-line{ display:flex; align-items:center; gap:8px; color:var(--text-dim); font-size:13px; margin-bottom: 16px;}
+  .dot{ width:7px; height:7px; border-radius:50%; background: var(--green); }
+  .dot.off{ background: var(--text-dim); }
+
+  /* ---------- room tabs (home page) ---------- */
+  .room-tabs{ display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:18px; -webkit-overflow-scrolling:touch; }
+  .room-tabs::-webkit-scrollbar{ display:none; }
+  .room-chip{
+    flex-shrink:0; border:1px solid var(--line); background: var(--bg-elev); color: var(--text-dim);
+    padding:8px 15px; border-radius:999px; font-size:13.5px; cursor:pointer; font-family:inherit; white-space:nowrap;
+  }
+  .room-chip.active{ background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight:600; }
+
+  /* ---------- device grid ---------- */
+  .device-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
+  @media (min-width:600px){ .device-grid{ grid-template-columns: repeat(3, 1fr); } }
+
+  .device-card{
+    background: var(--bg-elev); border:1px solid var(--line); border-radius: 14px; padding:14px;
+    display:flex; flex-direction:column; gap:14px; cursor:pointer; position:relative;
+    transition: border-color .15s ease;
+  }
+  .device-card:hover{ border-color:#3a464e; }
+  .device-card .card-top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .device-card .device-ic{ font-size:26px; }
+  .device-card .fav-star{
+    position:absolute; top:10px; right:10px; background:transparent; border:none; color: var(--text-dim);
+    font-size:15px; cursor:pointer; padding:2px;
+  }
+  .device-card .fav-star.on{ color: var(--accent); }
+  .device-card .name{ font-size:13.5px; font-weight:600; line-height:1.3; }
+  .device-card .room-tag{ font-size:11.5px; color: var(--text-dim); margin-top:2px; }
+  .device-card .reading{ font-size:12px; color: var(--text-dim); margin-top:2px; }
+  .device-card .card-bottom{ display:flex; justify-content:flex-end; }
+
+  .power-toggle{
+    width:46px; height:46px; border-radius:50%; border:1px solid var(--line); background: var(--bg-elev-2);
+    color: var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:19px;
+    flex-shrink:0;
+  }
+  .power-toggle.on{ background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .power-toggle:disabled{ opacity:.4; cursor:wait; }
+  .no-power{ width:46px; height:46px; }
+
+  /* ---------- modals (shared) ---------- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(10,13,15,.6); backdrop-filter: blur(2px);
+    display:none; align-items:center; justify-content:center; padding: 30px 14px; overflow-y:auto; z-index:70;
+  }
+  .overlay.show{ display:flex; }
+  .modal{ background: var(--bg-elev); border:1px solid var(--line); border-radius: 14px; width: 100%; max-width: 560px; padding: 22px; margin: auto; }
+  .modal h2{ font-family:'Space Grotesk', sans-serif; font-size:18px; margin:0 0 4px; font-weight:600;}
+  .modal .modal-sub{ color:var(--text-dim); font-size:13px; margin-bottom:18px; }
+  .field{ margin-bottom: 16px; }
+  .field label{ display:block; font-size:13px; color: var(--text-dim); margin-bottom:6px; }
+  .field input[type=text], .field input[type=number], .field input[type=time], .field select{
+    width:100%; background: var(--bg); border:1px solid var(--line); color: var(--text);
+    padding:9px 11px; border-radius:8px; font-size:16px; font-family:inherit;
+  }
+  .field input:focus, .field select:focus{ outline:none; border-color: var(--accent); }
+  input[type=text], input[type=number], input[type=time]{ font-size:16px; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  @media (max-width:480px){ .row2,.row3{ grid-template-columns:1fr; } }
+  .divider{ border:none; border-top:1px solid var(--line); margin:18px 0; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top: 14px; }
+
+  /* device detail modal specific */
+  .detail-head{ display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+  .detail-head .device-ic{ font-size:32px; }
+  .switch-list{ display:flex; flex-direction:column; gap:10px; }
+  .switch-row{ display:flex; align-items:center; justify-content:space-between; border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--bg); }
+  .switch-row .code{ font-size:13.5px; color: var(--text-dim); }
+
+  .switch{ position:relative; width:64px; height:36px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .switch .slider{ position:absolute; inset:0; background: var(--bg-elev-2); border:1px solid var(--line); border-radius:100px; cursor:pointer; transition: background .15s ease; }
+  .switch .slider:before{ content:""; position:absolute; width:30px; height:30px; left:2px; top:2px; background: var(--text-dim); border-radius:50%; transition: transform .15s ease, background .15s ease; }
+  .switch input:checked + .slider{ background: var(--accent-dim); border-color: var(--accent); }
+  .switch input:checked + .slider:before{ transform: translateX(28px); background: var(--accent); }
+  .switch input:disabled + .slider{ opacity:.5; cursor:wait; }
+
+  .ac-panel{ text-align:center; }
+  .ac-temp-display{ font-family:'Space Grotesk', sans-serif; font-size:56px; font-weight:600; margin: 6px 0 2px; }
+  .ac-temp-controls{ display:flex; align-items:center; justify-content:center; gap:22px; margin-bottom:22px; }
+  .ac-stepper{
+    width:44px; height:44px; border-radius:50%; border:1px solid var(--line); background: var(--bg-elev-2);
+    color: var(--text); font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .ac-stepper:hover{ border-color: var(--accent); color: var(--accent); }
+  .ac-row{ display:flex; gap:10px; justify-content:center; margin-bottom:14px; }
+  .ac-row .btn{ flex:1; max-width:130px; }
+  .ac-row .btn.selected{ border-color: var(--accent); color: var(--accent); }
+
+  .hint{ font-size:12px; color:var(--text-dim); margin-top:6px; text-align:center; }
+  .version-tag{ font-family:'Space Grotesk', monospace; opacity:.6; font-size:11px; }
+
+  .meter-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:10px 0 18px; }
+  .meter-stat{ text-align:center; padding:14px 8px; }
+  .meter-num{ font-family:'Space Grotesk', sans-serif; font-size:28px; font-weight:700; }
+  .meter-label{ font-size:12px; color:var(--text-dim); margin-top:4px; }
+  .meter-divider{ grid-column:1/-1; border:none; border-top:1px solid var(--line); margin:0; }
+
+  .sensor-visual{ display:flex; flex-direction:column; align-items:center; padding:10px 0 20px; gap:16px; }
+  .sensor-svg-wrap{ width:100%; max-width:220px; }
+  .sensor-status-pill{
+    display:flex; align-items:center; gap:8px; padding:10px 22px; border-radius:999px; font-weight:600; font-size:15px;
+  }
+  .sensor-status-pill.closed{ background: rgba(95,184,122,.15); color: var(--green); border:1px solid var(--green); }
+  .sensor-status-pill.open{ background: rgba(226,104,92,.15); color: var(--red); border:1px solid var(--red); }
+  .sensor-info-row{ color:var(--text-dim); font-size:13.5px; display:flex; gap:18px; }
+
+  .gate-visual{ display:flex; flex-direction:column; align-items:center; padding: 2px 0 0; }
+  .gate-svg-wrap{ width:100%; max-width:170px; margin-bottom:0; }
+  .gate-svg-wrap-lg{ max-width:280px; margin-bottom:2px; }
+  .gate-shutter{ transition: height 0.6s cubic-bezier(.4,0,.2,1); }
+  .gate-sensor-row{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:4px; }
+  .gate-pct-row{ display:flex; align-items:baseline; justify-content:center; gap:10px; margin-bottom:10px; }
+  .gate-pct-label{ font-family:'Space Grotesk', sans-serif; font-size:32px; font-weight:700; margin:0; }
+  .gate-status-label{ color: var(--text-dim); font-size:13px; margin:0; }
+  .gate-status-label.moving{ color: var(--accent); }
+  .sensor-badge{
+    display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:5px 12px;
+    border-radius:100px; border:1px solid var(--line); background:var(--bg-elev-2); margin-bottom:14px;
+  }
+  .sensor-mini-wrap{ width:55px; margin:0; }
+  .sensor-badge .dot{ width:8px; height:8px; border-radius:50%; background:var(--text-dim); flex-shrink:0; }
+  .sensor-badge.match .dot{ background: var(--green); }
+  .sensor-badge.mismatch{ border-color: var(--red); color: var(--red); }
+  .sensor-badge.mismatch .dot{ background: var(--red); }
+  .gate-btn-row{ display:flex; gap:10px; width:100%; margin-bottom:8px; }
+  .gate-btn-row .btn{ flex:1; }
+  .gate-quick-row{ display:flex; align-items:center; gap:10px; width:100%; }
+  .gate-quick-row input[type=number]{ width:70px; text-align:center; }
+  .gate-quick-row .btn{ flex:1; }
+  .pulse-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; background: var(--accent); margin-right:6px; animation: pulseblink 1s infinite; }
+  @keyframes pulseblink{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  /* ---------- rule builder page (existing) ---------- */
+  .trigger-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+  .trigger-toggle button{ flex:1; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color: var(--text-dim); cursor:pointer; font-family:inherit; font-size:13.5px; }
+  .trigger-toggle button.active{ border-color: var(--accent); color: var(--accent); background: rgba(232,163,61,.08); }
+
+  .rule-card{ background: var(--bg-elev); border:1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 12px; }
+  .rule-card.disabled{ opacity:.5; }
+  .rule-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .rule-name{ font-weight:600; font-size:15.5px; }
+  .rule-meta{ color:var(--text-dim); font-size:13px; margin-top:4px; }
+  .rule-actions-list{ margin-top:10px; display:flex; flex-direction:column; gap:5px; }
+  .rule-action-row{ font-size:13.5px; color:var(--text-dim); display:flex; gap:6px; align-items:center;}
+  .rule-action-row .arrow{ color:var(--accent); }
+  .rule-controls{ display:flex; gap:6px; align-items:center; flex-shrink:0; }
+  .tag{ display:inline-flex; align-items:center; gap:5px; font-size:12px; padding:3px 9px; border-radius:100px; border:1px solid var(--line); color: var(--text-dim); }
+  .tag.device{ border-color:#3a5570; color:var(--blue); }
+  .tag.schedule{ border-color:#5a5030; color:var(--accent); }
+
+  .action-block{ border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px; background: var(--bg); }
+  .action-block-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .action-block-head span{ font-size:13px; color:var(--text-dim); font-weight:600; }
+  .switch-grid{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .switch-chip{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:8px 12px; background: var(--bg-elev-2); font-size:13.5px; cursor:pointer; }
+  .switch-chip input{ accent-color: var(--accent); }
+
+  /* ---------- Smart-Life-style switch controls ---------- */
+  .big-toggle-wrap{ display:flex; flex-direction:column; align-items:center; padding: 10px 0 6px; }
+  .big-toggle{
+    width:170px; height:170px; border-radius:22px; border:2px solid var(--line); background: var(--bg-elev-2);
+    color: var(--text-dim); font-family:'Space Grotesk', sans-serif; font-size:22px; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; letter-spacing:.03em;
+    transition: all .15s ease;
+  }
+  .big-toggle.on{ background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .big-toggle:active{ transform: scale(.97); }
+  .big-toggle:disabled{ opacity:.5; cursor:wait; }
+  .big-toggle-label{ margin-top:14px; color: var(--text-dim); font-size:13.5px; }
+
+  .gate-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .gate-btn{
+    aspect-ratio: 1/1; border-radius:16px; border:1px solid var(--line); background: var(--bg-elev-2);
+    color: var(--text); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    cursor:pointer; font-family:inherit; font-size:14px;
+  }
+  .gate-btn .gate-ic{ font-size:30px; color: var(--text-dim); }
+  .gate-btn:active{ background: var(--accent-dim); border-color: var(--accent); }
+  .gate-btn:active .gate-ic{ color: var(--accent); }
+
+  .bulb-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+  .bulb-card{
+    position:relative;
+    border:1px solid var(--line); border-radius:14px; padding:26px 8px 20px; background: var(--bg-elev-2);
+    display:flex; flex-direction:column; align-items:center; gap:12px; cursor:pointer;
+    transition: all .15s ease;
+  }
+  .bulb-card.on{ background: var(--accent-dim); border-color: var(--accent); }
+  .bulb-card:active{ transform: scale(.97); }
+  .bulb-card .bulb-ic{ font-size:32px; opacity:.4; filter: grayscale(1); transition: all .15s ease; }
+  .bulb-card.on .bulb-ic{ opacity:1; filter: none; }
+  .bulb-card .bulb-name{ font-size:13px; color: var(--text-dim); text-align:center; }
+  .bulb-card.on .bulb-name{ color: var(--accent); font-weight:600; }
+  .bulb-rename-btn{
+    position:absolute; top:6px; right:6px; background:none; border:none; font-size:14px;
+    opacity:.5; padding:5px; cursor:pointer; z-index:2; line-height:1;
+  }
+  .bulb-rename-btn:active{ opacity:1; }
+  .rename-btn-inline{
+    background:none; border:none; font-size:13px; opacity:.6; cursor:pointer; padding:2px 4px;
+  }
+  .rename-btn-inline:active{ opacity:1; }
+
+  .toast{
+    position:fixed; bottom:74px; left:50%; transform:translateX(-50%);
+    background: var(--bg-elev-2); border:1px solid var(--line); color: var(--text);
+    padding:11px 18px; border-radius:8px; font-size:13.5px; z-index:100; display:none;
+  }
+  .toast.show{ display:block; }
+  .toast.err{ border-color: var(--red); color: var(--red); }
+
+  .page{ display:none; }
+  .page.active{ display:block; }
+
+  /* ---------- login screen ---------- */
+  #loginScreen{
+    min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; padding:24px; gap:22px; text-align:center;
+  }
+  #loginScreen h1{ font-family:'Space Grotesk', sans-serif; font-size:24px; margin:0; }
+  #loginScreen .sub{ color:var(--text-dim); font-size:13.5px; margin-top:4px; }
+  #loginPinInput{
+    width:220px; text-align:center; letter-spacing:.3em; font-size:22px; padding:14px 10px;
+    border-radius:12px; border:1px solid var(--line); background:var(--bg-elev-2); color:var(--text);
+    font-family:'Space Grotesk', monospace;
+  }
+  #loginError{ color:var(--red); font-size:13.5px; min-height:18px; }
+
+  /* ---------- theme toggle ---------- */
+  .theme-toggle-btn{ font-size:17px; }
+
+  /* ---------- history / audit log page ---------- */
+  .history-row{
+    border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:8px; background:var(--bg-elev);
+    display:flex; flex-direction:column; gap:3px;
+  }
+  .history-row .h-top{ display:flex; justify-content:space-between; gap:10px; font-size:13.5px; color:var(--text-dim); }
+  .history-row .h-action{ font-size:14.5px; font-weight:600; }
+  .history-row .h-detail{ font-size:13.5px; color:var(--text-dim); }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen">
+  <div>
+    <h1>🔐 Smart Home — Sykhai</h1>
+    <div class="sub">ໃສ່ລະຫັດຜ່ານເພື່ອເຂົ້າສູ່ລະບົບ</div>
+  </div>
+  <div>
+    <input type="password" id="loginPinInput" inputmode="numeric" placeholder="•••••" maxlength="12" autocomplete="off">
+    <div id="loginError"></div>
+  </div>
+  <button class="btn btn-accent" id="loginSubmitBtn" style="width:220px;">ເຂົ້າສູ່ລະບົບ</button>
+</div>
+
+<div class="wrap" id="appWrap" style="display:none;">
+
+  <!-- ============ PAGE: HOME (device grid) ============ -->
+  <div class="page active" id="pageHome">
+    <header class="top">
+      <div>
+        <h1>ອຸປະກອນ</h1>
+        <div class="sub">Smart Home — Sykhai <span id="appVersionTag" class="version-tag"></span></div>
+      </div>
+      <div class="toolbar">
+        <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" title="ສະຫຼັບໂໝດມືດ/ແຈ້ງ">🌙</button>
+        <button class="icon-btn" id="roomOrderSettingsBtn" title="ຈັດລຳດັບແທັບຫ້ອງ">⚙️</button>
+        <button class="icon-btn" id="reorderModeBtn" title="ຈັດລຳດັບອຸປະກອນ">🔀</button>
+        <button class="icon-btn" id="verifyAllBtn" title="ຢືນຢັນສະຖານະຈິງທັງໝົດ">✅</button>
+        <button class="icon-btn" id="refreshHomeBtn" title="ໂຫຼດຂໍ້ມູນໃໝ່">↻</button>
+        <button class="icon-btn" id="manageUsersBtn" title="ຈັດການບັນຊີ" style="display:none;">👤</button>
+        <button class="icon-btn" id="logoutBtn" title="ອອກຈາກລະບົບ">🚪</button>
+      </div>
+    </header>
+
+    <div class="status-line" id="homeStatusLine"><span class="dot off"></span><span>ກຳລັງໂຫຼດ...</span></div>
+
+    <div class="room-tabs" id="roomTabs"></div>
+
+    <div id="deviceGrid" class="device-grid"></div>
+  </div>
+
+  <!-- ============ PAGE: RULES (automation builder) ============ -->
+  <div class="page" id="pageRules">
+    <header class="top">
+      <div>
+        <h1>ຕັ້ງກົດອັດຕະໂນມັດ</h1>
+        <div class="sub">Smart Home — ອຸປະກອນ Tuya ທັງໝົດ <span id="appVersionTag2" class="version-tag"></span></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refreshBtn">↻ ໂຫຼດຂໍ້ມູນໃໝ່</button>
+        <button class="btn btn-accent" id="newRuleBtn">+ ສ້າງກົດໃໝ່</button>
+      </div>
+    </header>
+
+    <div class="status-line" id="statusLine"><span class="dot off"></span><span>ກຳລັງໂຫຼດ...</span></div>
+
+    <div id="rulesContainer"></div>
+  </div>
+
+  <!-- ============ PAGE: HISTORY (audit log — owner only) ============ -->
+  <div class="page" id="pageHistory">
+    <header class="top">
+      <div>
+        <h1>ປະຫວັດການນຳໃຊ້</h1>
+        <div class="sub">ໃຜກົດຫຍັງ ເມື່ອໃດ — ເຫັນສະເພາະບັນຊີ owner</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refreshHistoryBtn">↻ ໂຫຼດຂໍ້ມູນໃໝ່</button>
+      </div>
+    </header>
+    <div id="historyContainer"></div>
+  </div>
+
+</div>
+
+<!-- bottom tab bar -->
+<div class="tabbar">
+  <div class="tabbar-inner">
+    <button class="tabbtn active" data-page="pageHome"><span class="ic">🏠</span>ອຸປະກອນ</button>
+    <button class="tabbtn" data-page="pageRules"><span class="ic">⚙️</span>ຕັ້ງກົດ</button>
+    <button class="tabbtn" data-page="pageHistory" id="historyTabBtn" style="display:none;"><span class="ic">📋</span>ປະຫວັດ</button>
+  </div>
+</div>
+
+<!-- ============ MODAL: device detail ============ -->
+<div class="overlay" id="deviceOverlay">
+  <div class="modal" id="deviceModal"></div>
+</div>
+
+<!-- ============ MODAL: create/edit rule ============ -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">ສ້າງກົດໃໝ່</h2>
+
+    <div class="field">
+      <label>ຊື່ກົດ</label>
+      <input type="text" id="ruleName" placeholder="ເຊັ່ນ: ປະຕູຮົ້ວເປີດ → ໄຟ+ແອ">
+    </div>
+
+    <div class="field">
+      <label>Trigger — ໃຫ້ກົດນີ້ຮັນເມື່ອໃດ</label>
+      <div class="trigger-toggle">
+        <button type="button" id="triggerDeviceBtn" class="active">📟 ເມື່ອອຸປະກອນ</button>
+        <button type="button" id="triggerScheduleBtn">🕒 ຕາມເວລາ</button>
+      </div>
+    </div>
+
+    <div id="triggerDeviceBlock">
+      <div class="field">
+        <label>ອຸປະກອນ trigger</label>
+        <select id="triggerDevice"></select>
+      </div>
+      <div class="row3">
+        <div class="field">
+          <label>ຄ່າ (dp code)</label>
+          <select id="triggerCode"></select>
+        </div>
+        <div class="field">
+          <label>ເງື່ອນໄຂ</label>
+          <select id="triggerOp">
+            <option value="==">ເທົ່າກັບ (==)</option>
+            <option value=">">ຫຼາຍກວ່າ (&gt;)</option>
+            <option value="<">ໜ້ອຍກວ່າ (&lt;)</option>
+            <option value=">=">ຫຼາຍກວ່າ ຫຼື ເທົ່າ</option>
+            <option value="<=">ໜ້ອຍກວ່າ ຫຼື ເທົ່າ</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ຄ່າທີ່ປຽບທຽບ</label>
+          <input type="text" id="triggerValue" placeholder="true / 30 / ...">
+        </div>
+      </div>
+    </div>
+
+    <div id="triggerScheduleBlock" style="display:none;">
+      <div class="row2">
+        <div class="field">
+          <label>ໂມງ</label>
+          <input type="time" id="scheduleTime" value="19:00">
+        </div>
+        <div class="field">
+          <label>ຊ້ຳທຸກ</label>
+          <select id="scheduleRepeat">
+            <option value="daily">ທຸກມື້</option>
+            <option value="once">ຄັ້ງດຽວ (ມື້ນີ້)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="field" style="margin-bottom:10px;">
+      <label style="margin-bottom:0;">Actions — ໃຫ້ເຮັດຫຍັງແດ່</label>
+    </div>
+    <div id="actionsContainer"></div>
+    <button class="btn" id="addActionBtn" type="button">+ ເພີ່ມ Action</button>
+
+    <div class="modal-actions">
+      <button class="btn" id="cancelBtn" type="button">ຍົກເລີກ</button>
+      <button class="btn btn-accent" id="saveRuleBtn" type="button">ບັນທຶກກົດ</button>
+    </div>
+  </div>
+</div>
+
+<div id="versionBannerContainer"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
+// v1.02 — ເລີ່ມນັບຄັ້ງທຳອິດ (ຄືກັນກັບ Marketing Studio: ບວກທຸກຄັ້ງທີ່ແກ້, .99 ແລ້ວຂຶ້ນ (x+1).00)
+// ໃຊ້ຢືນຢັນວ່າ browser ກຳລັງໃຊ້ໄຟລ໌ລ່າສຸດແທ້ ບໍ່ແມ່ນຄ້າງ cache ເກົ່າ
+const APP_VERSION = 'v1.23';
+(function setVersionTags(){
+  const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
+  const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
+})();
+
+// ກວດເວີຊັນໃໝ່ — ດຶງໄຟລ໌ຕົນເອງກັບມາອ່ານ APP_VERSION ຈິງ ບໍ່ຕ້ອງຈື່ຄ່າແຍກ. ຮັນຕອນເປີດໜ້າ +
+// ຕອນກັບມາໂຟກັດ/ເປີດຄືນ (ສຳຄັນສຳລັບໄອຄອນ "ແຊໄວ້ໜ້າຈໍ" ທີ່ cache ແໜ້ນກວ່າ tab ທຳມະດາ) —
+// ບໍ່ແມ່ນ timer, ບໍ່ຮ້ອງ Supabase, ພຽງແຕ່ດຶງໄຟລ໌ HTML ຕົນເອງ 1 ຄັ້ງຕໍ່ event.
+let newVersionAvailable = null;
+let versionBannerDismissed = false;
+async function checkForNewVersion(){
+  try{
+    const res = await fetch(location.origin+location.pathname+'?_v='+Date.now(), { cache:'no-store' });
+    if (!res.ok) return;
+    const text = await res.text();
+    const m = /APP_VERSION\s*=\s*'([^']+)'/.exec(text);
+    const latest = m && m[1];
+    if (latest && latest !== APP_VERSION && latest !== newVersionAvailable){
+      newVersionAvailable = latest;
+      versionBannerDismissed = false;
+      updateVersionBanner();
+    }
+  }catch(e){ console.error('version check failed:', e); }
+}
+function updateVersionBanner(){
+  const el = document.getElementById('versionBannerContainer');
+  if (!el) return;
+  const show = newVersionAvailable && !versionBannerDismissed;
+  el.innerHTML = show ? `
+    <div style="position:fixed; top:0; left:0; right:0; z-index:500; background:var(--accent); color:var(--accent-text); padding:10px 16px; text-align:center; font-size:13.5px; display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; box-shadow:0 2px 10px rgba(0,0,0,.3);">
+      <span>🆕 ມີເວີຊັນໃໝ່ (${escapeHtml(newVersionAvailable)}) — ຂໍ້ມູນທີ່ໃຊ້ຢູ່ອາດເກົ່າ</span>
+      <button id="btnReloadNewVersion" class="btn" style="background:#fff; color:var(--accent-text); border:none; padding:5px 12px;">🔄 ໂຫຼດຄືນ</button>
+      <button id="btnDismissVersionBanner" style="background:none; border:none; color:var(--accent-text); cursor:pointer; font-size:16px; line-height:1; padding:0 4px;" title="ປິດ">✕</button>
+    </div>
+  ` : '';
+  const reloadBtn = document.getElementById('btnReloadNewVersion');
+  if (reloadBtn) reloadBtn.addEventListener('click', () => location.reload());
+  const dismissBtn = document.getElementById('btnDismissVersionBanner');
+  if (dismissBtn) dismissBtn.addEventListener('click', () => { versionBannerDismissed = true; updateVersionBanner(); });
+}
+function handleVisibilityOrFocus(){
+  if (document.visibilityState && document.visibilityState !== 'visible') return;
+  checkForNewVersion();
+}
+document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+window.addEventListener('focus', handleVisibilityOrFocus);
+checkForNewVersion();
+
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3cmlqcGtrdWZhcmRkc3lxaHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MDQ4ODYsImV4cCI6MjA5ODQ4MDg4Nn0.GoGsR4Z4u4UiCJ03-jZkJAgjJtjD8J4MosiBh4cpths';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// =====================================================================
+// THEME (ມືດ/ແຈ້ງ) — ບັນທຶກໄວ້ໃນເຄື່ອງ, ບໍ່ຕ້ອງເຂົ້າ Supabase
+// =====================================================================
+const THEME_KEY = 'smarthome_theme';
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = t === 'light' ? '☀️' : '🌙';
+}
+function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(saved);
+}
+document.getElementById('themeToggleBtn').addEventListener('click', () => {
+  const cur = localStorage.getItem(THEME_KEY) || 'dark';
+  const next = cur === 'light' ? 'dark' : 'light';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+initTheme();
+
+// =====================================================================
+// LOGIN / SESSION — ຕາຕະລາງ `smart_home_users` ແຍກຕ່າງຫາກຈາກລະບົບ Sykhai (Marketing
+// Studio) 100% ຕາມທີ່ Tar ຂໍ — ຄົນລະກຸ່ມຜູ້ໃຊ້, ບັນຊີບໍ່ກ່ຽວຂ້ອງກັນເລີຍ. Tar ສ້າງບັນຊີໃຫ້
+// ຄົນອື່ນຜ່ານປຸ່ມ "👤 ຈັດການບັນຊີ" (ເຫັນສະເພາະ role=owner) ຢູ່ໃນແອັບນີ້ໂດຍກົງ.
+// =====================================================================
+const SESSION_KEY = 'smarthome_session';
+let CURRENT_USER = null; // {id, name, role}
+
+function loadSession(){
+  try{
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+function saveSession(user){
+  CURRENT_USER = user;
+  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+}
+function clearSession(){
+  CURRENT_USER = null;
+  localStorage.removeItem(SESSION_KEY);
+}
+
+async function attemptLogin(pin){
+  const { data, error } = await sb.from('smart_home_users').select('id,name,password,role,approved')
+    .eq('password', pin).eq('approved', true).limit(1).maybeSingle();
+  if (error || !data) return null;
+  return { id: data.id, name: data.name, role: data.role };
+}
+
+function showLoginScreen(){
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appWrap').style.display = 'none';
+}
+function showApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appWrap').style.display = '';
+  const isOwner = CURRENT_USER && CURRENT_USER.role === 'owner';
+  document.getElementById('historyTabBtn').style.display = isOwner ? '' : 'none';
+  document.getElementById('manageUsersBtn').style.display = isOwner ? '' : 'none';
+}
+
+document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
+document.getElementById('loginPinInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+async function doLogin(){
+  const pin = document.getElementById('loginPinInput').value.trim();
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!pin){ errEl.textContent = 'ໃສ່ລະຫັດຜ່ານກ່ອນ'; return; }
+  const btn = document.getElementById('loginSubmitBtn');
+  btn.disabled = true;
+  try{
+    const user = await attemptLogin(pin);
+    if (!user){ errEl.textContent = 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ ຫຼືບັນຊີຍັງບໍ່ໄດ້ອະນຸມັດ'; return; }
+    saveSession(user);
+    document.getElementById('loginPinInput').value = '';
+    showApp();
+    boot();
+    logActivity('ເຂົ້າສູ່ລະບົບ');
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  if (activeGateStopTick){ activeGateStopTick(); activeGateStopTick = null; }
+  clearSession();
+  showLoginScreen();
+});
+
+// =====================================================================
+// ປະຫວັດການນຳໃຊ້ (audit log) — ບັນທຶກທຸກຄັ້ງທີ່ມີການສັ່ງອຸປະກອນ/ແກ້ກົດ ວ່າໃຜກົດ ເມື່ອໃດ
+// =====================================================================
+async function logActivity(action, detail){
+  if (!CURRENT_USER) return;
+  try{
+    await sb.from('smart_home_activity_log').insert({
+      user_id: CURRENT_USER.id, user_name: CURRENT_USER.name, action, detail: detail || null,
+    });
+  }catch(e){ /* non-fatal — ບໍ່ໃຫ້ບັນຫາການບັນທຶກປະຫວັດຢຸດການສັ່ງອຸປະກອນຈິງ */ }
+}
+function fmtHistoryTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleString('lo-LA', { timeZone:'Asia/Vientiane', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+}
+async function renderHistoryPage(){
+  const box = document.getElementById('historyContainer');
+  box.innerHTML = '<div class="hint">ກຳລັງໂຫຼດ...</div>';
+  const { data, error } = await sb.from('smart_home_activity_log').select('*').order('created_at', { ascending:false }).limit(200);
+  if (error){ box.innerHTML = `<div class="empty">ໂຫຼດປະຫວັດລົ້ມເຫຼວ: ${escapeHtml(error.message||'')}</div>`; return; }
+  if (!data || data.length === 0){ box.innerHTML = '<div class="empty"><b>ບໍ່ມີປະຫວັດ</b>ຍັງບໍ່ມີການກົດອຸປະກອນເທື່ອ</div>'; return; }
+  box.innerHTML = data.map(row => `
+    <div class="history-row">
+      <div class="h-top"><span>${escapeHtml(row.user_name||'')}</span><span>${escapeHtml(fmtHistoryTime(row.created_at))}</span></div>
+      <div class="h-action">${escapeHtml(row.action||'')}</div>
+      ${row.detail ? `<div class="h-detail">${escapeHtml(row.detail)}</div>` : ''}
+    </div>`).join('');
+}
+document.getElementById('refreshHistoryBtn').addEventListener('click', renderHistoryPage);
+document.getElementById('historyTabBtn').addEventListener('click', renderHistoryPage);
+
+// =====================================================================
+// ຈັດການບັນຊີ (owner ເທົ່ານັ້ນ) — ສ້າງ/ອະນຸມັດ/ປິດການໃຊ້ບັນຊີ smart_home_users
+// =====================================================================
+function openManageUsers(){
+  activeDetailDeviceId = null;
+  renderManageUsersModal();
+  document.getElementById('deviceOverlay').classList.add('show');
+}
+async function renderManageUsersModal(){
+  const modal = document.getElementById('deviceModal');
+  modal.innerHTML = `
+    <h2 style="margin:0 0 4px;">ຈັດການບັນຊີ Smart Home</h2>
+    <div class="modal-sub" style="margin-bottom:16px;">ບັນຊີແຍກຕ່າງຫາກຈາກລະບົບ Sykhai 100%</div>
+    <div id="usersList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:18px;">ກຳລັງໂຫຼດ...</div>
+    <div style="border-top:1px solid var(--line); padding-top:16px;">
+      <div class="field"><label>ຊື່ບັນຊີໃໝ່</label><input type="text" id="newUserName" placeholder="ເຊັ່ນ ແມ່, ພໍ່, ລູກ"></div>
+      <div class="field"><label>ລະຫັດຜ່ານ (PIN)</label><input type="text" id="newUserPin" placeholder="ຕົວເລກ 4 ໂຕ" inputmode="numeric"></div>
+      <div class="field">
+        <label>ສິດທິ</label>
+        <select id="newUserRole"><option value="member">member (ຄວບຄຸມອຸປະກອນທົ່ວໄປ)</option><option value="owner">owner (ເຫັນປະຫວັດ+ຈັດການບັນຊີໄດ້ນຳ)</option></select>
+      </div>
+      <button class="btn btn-accent" id="createUserBtn" style="width:100%;">+ ສ້າງບັນຊີ</button>
+    </div>
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+  modal.querySelector('#closeDetailBtn').addEventListener('click', closeDeviceDetail);
+  modal.querySelector('#createUserBtn').addEventListener('click', createNewUser);
+
+  const { data, error } = await sb.from('smart_home_users').select('*').order('created_at', { ascending:true });
+  const listBox = modal.querySelector('#usersList');
+  if (error){ listBox.innerHTML = `<div class="empty">ໂຫຼດລົ້ມເຫຼວ: ${escapeHtml(error.message||'')}</div>`; return; }
+  listBox.innerHTML = (data||[]).map(u => `
+    <div class="switch-row" data-uid="${escapeHtml(u.id)}">
+      <span>${escapeHtml(u.name)} <span style="color:var(--text-dim); font-size:12.5px;">(${escapeHtml(u.role)}${u.approved?'':' — ປິດຢູ່'})</span></span>
+      <button class="btn btn-ghost btn-danger toggle-user-btn" data-uid="${escapeHtml(u.id)}" data-approved="${u.approved}" style="padding:6px 10px;">${u.approved?'ປິດການໃຊ້':'ເປີດຄືນ'}</button>
+    </div>`).join('') || '<div class="hint">ຍັງບໍ່ມີບັນຊີ</div>';
+  listBox.querySelectorAll('.toggle-user-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const uid = btn.dataset.uid;
+      const newApproved = btn.dataset.approved !== 'true';
+      if (uid === CURRENT_USER.id && !newApproved){ toast('ປິດການໃຊ້ບັນຊີຕົນເອງບໍ່ໄດ້', true); return; }
+      const { error: e2 } = await sb.from('smart_home_users').update({ approved: newApproved }).eq('id', uid);
+      if (e2){ toast('ອັບເດດລົ້ມເຫຼວ', true); return; }
+      toast(newApproved ? 'ເປີດການໃຊ້ບັນຊີແລ້ວ' : 'ປິດການໃຊ້ບັນຊີແລ້ວ');
+      logActivity((newApproved?'ເປີດ':'ປິດ') + 'ການໃຊ້ບັນຊີ ' + uid);
+      renderManageUsersModal();
+    });
+  });
+}
+async function createNewUser(){
+  const modal = document.getElementById('deviceModal');
+  const name = modal.querySelector('#newUserName').value.trim();
+  const pin = modal.querySelector('#newUserPin').value.trim();
+  const role = modal.querySelector('#newUserRole').value;
+  if (!name || !pin){ toast('ໃສ່ຊື່ ແລະ ລະຫັດຜ່ານໃຫ້ຄົບ', true); return; }
+  const id = 'shu' + Date.now();
+  const { error } = await sb.from('smart_home_users').insert({ id, name, password: pin, role, approved: true });
+  if (error){ toast('ສ້າງບັນຊີລົ້ມເຫຼວ: ' + error.message, true); return; }
+  toast('ສ້າງບັນຊີ "' + name + '" ແລ້ວ');
+  logActivity('ສ້າງບັນຊີໃໝ່ ' + name, role);
+  renderManageUsersModal();
+}
+document.getElementById('manageUsersBtn').addEventListener('click', openManageUsers);
+
+const EXCLUDED_TUYA_IDS = new Set(['bf3df8b270bbcf270f3wzd']); // ປະຕູຮົ້ວນາເຄືອ - ເຮືອນອື່ນ, ຫ້າມສະແດງ
+
+// ອຸປະກອນປະຕູ 4-ຊ່ອງ ທີ່ຮູ້ຈັກ label ຄວາມໝາຍແທ້ (ຄືການສະແດງໃນ Smart Life)
+const GATE_4CH_LABELS = {
+  'bf9bc8d798602a93b5pubc': [ // ປະຕູຮ້ານໃໝ່
+    { code:'switch_1', label:'ເປີດປະຕູ', icon:'▲' },
+    { code:'switch_2', label:'ປິດປະຕູ', icon:'▼' },
+    { code:'switch_3', label:'ຢຸດ', icon:'⏸' },
+    { code:'switch_4', label:'ລ໋ອກ', icon:'🔒' },
+  ],
+};
+
+// ປະຕູ 2 ໂຕທີ່ມີ config ຕັ້ງເວລາໄວ້ (gate_position_config) — ໃຊ້ໜ້າ animation + % ແທນ switch ທຳມະດາ
+const GATE_CONTROL_DEVICES = {
+  'bffff2c5a24de1294ad1gb': { type: 'single', pressCode: 'switch_1' }, // ປະຕູຮົ້ວນ້ອຍ
+  'bf9bc8d798602a93b5pubc': { type: '4ch', openCode:'switch_1', closeCode:'switch_2', stopCode:'switch_3' }, // ປະຕູຮ້ານໃໝ່
+};
+
+// ຈັບຄູ່ປະຕູ ↔ Sensor ປະຕູຮົ້ວ (magnetic contact) ໃຫ້ເບິ່ງໄດ້ວ່າ % ທີ່ຄິດໄລ່ ກົງກັບສະຖານະຈິງບໍ່
+// (Sensor ຮູ້ແຄ່ "ເປີດ/ປິດ" ຖ້ຽວດຽວ ບໍ່ຮູ້ຈັກ % — ໃຊ້ຄູ່ກັບ % ເພື່ອກວດຄວາມຖືກຕ້ອງເທົ່ານັ້ນ)
+const GATE_SENSOR_PAIR = {
+  'bffff2c5a24de1294ad1gb': 'bfea3e37bcb01aa0ddxvye', // ປະຕູຮົ້ວນ້ອຍ ↔ Sensor ປະຕູຮົ້ວ
+};
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+// ==== ກົດຄ້າງແລ້ວລາກ ເພື່ອຈັດລຳດັບ (ຄືກັນ Smart Life) ====
+// ໃຊ້ນຳກັນທັງ "ຈັດລຳດັບແທັບຫ້ອງ" ແລະ "ຈັດລຳດັບອຸປະກອນ" — ບໍ່ຂຽນ logic ຍ້າຍ/ບັນທຶກໃໝ່,
+// ແຕ່ເອີ້ນ moveStepFn(id, direction) ອັນເກົ່າຊ້ຳໆເທື່ອລະບາດກ້າວ (ອັນນັ້ນຖືກທົດສອບແລ້ວວ່າບັນທຶກ
+// Supabase ຖືກຕ້ອງ) ຈົນເຖິງຕຳແໜ່ງທີ່ລາກໄປ — ວິທີນີ້ປອດໄພກວ່າຂຽນ index-reassignment ໃໝ່ໝົດ.
+function attachDragReorder(container, itemSelector, moveStepFn){
+  let dragEl = null, dragId = null, startX = 0, startY = 0, pending = false;
+
+  function idOf(el){ return el.dataset.dragId; }
+  function items(){ return Array.from(container.querySelectorAll(itemSelector)); }
+
+  function onDown(e){
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    const item = handle.closest(itemSelector);
+    if (!item) return;
+    dragEl = item; dragId = idOf(item);
+    startX = e.clientX; startY = e.clientY;
+    try{ handle.setPointerCapture(e.pointerId); }catch(_e){}
+    item.classList.add('dragging');
+    e.preventDefault();
+  }
+  function onMove(e){
+    if (!dragEl || pending) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    dragEl.style.transform = `translate(${dx}px, ${dy}px)`;
+    dragEl.style.position = 'relative';
+    dragEl.style.zIndex = '50';
+    dragEl.style.pointerEvents = 'none';
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    dragEl.style.pointerEvents = '';
+    const target = under ? under.closest(itemSelector) : null;
+    if (target && target !== dragEl && container.contains(target)){
+      const list = items();
+      const fromIdx = list.indexOf(dragEl);
+      const toIdx = list.indexOf(target);
+      if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx){
+        pending = true;
+        moveStepFn(dragId, toIdx > fromIdx ? 1 : -1);
+        // ຫລັງ moveStepFn render ໃໝ່ແລ້ວ DOM node ເກົ່າຖືກທຳລາຍ — ຫາ node ໃໝ່ ແລ້ວໃສ່ຄືນສະຖານະລາກ
+        requestAnimationFrame(() => {
+          const fresh = container.querySelector(`[data-drag-id="${CSS.escape(dragId)}"]`);
+          if (fresh){
+            dragEl = fresh; dragEl.classList.add('dragging');
+            startX = e.clientX; startY = e.clientY;
+          }
+          pending = false;
+        });
+      }
+    }
+  }
+  function onUp(){
+    if (!dragEl) return;
+    dragEl.classList.remove('dragging');
+    dragEl.style.transform = ''; dragEl.style.position = ''; dragEl.style.zIndex = '';
+    dragEl = null; dragId = null;
+  }
+  container.addEventListener('pointerdown', onDown);
+  container.addEventListener('pointermove', onMove);
+  container.addEventListener('pointerup', onUp);
+  container.addEventListener('pointercancel', onUp);
+}
+
+const STATE = {
+  devices: [],
+  rules: [],
+  actions: [],
+  editingActions: [],
+  currentRoom: 'ໜ້າດ່ວນ',
+  reorderMode: false,
+  roomOrder: null,
+};
+
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(()=>{ t.className='toast'; }, 3200);
+}
+function deviceById(id){ return STATE.devices.find(d => d.id === id); }
+function deviceByTuyaId(tid){ return STATE.devices.find(d => d.tuya_device_id === tid); }
+function escapeHtml(s){ return String(s??'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function confirmModal(msg){ return window.confirm(msg); }
+
+// =====================================================================
+// TAB NAVIGATION
+// =====================================================================
+document.querySelectorAll('.tabbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabbtn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.page).classList.add('active');
+  });
+});
+
+// =====================================================================
+// SHARED DATA LOAD
+// =====================================================================
+async function loadAll(){
+  setStatus(false, 'ກຳລັງໂຫຼດ...');
+  try{
+    const [devRes, ruleRes, actRes] = await Promise.all([
+      sb.from('iot_devices').select('id,tuya_device_id,name,category,room,is_favorite,sort_order,current_state,is_online,last_seen_at,switch_labels').order('name'),
+      sb.from('automation_rules').select('*').order('created_at', { ascending:false }),
+      sb.from('automation_actions').select('*').order('sort_order'),
+      loadRoomOrderPref(),
+    ]);
+    if (devRes.error) throw devRes.error;
+    if (ruleRes.error) throw ruleRes.error;
+    if (actRes.error) throw actRes.error;
+
+    STATE.devices = (devRes.data||[]).filter(d => !EXCLUDED_TUYA_IDS.has(d.tuya_device_id));
+    STATE.rules = ruleRes.data || [];
+    STATE.actions = actRes.data || [];
+
+    renderRoomTabs();
+    renderDeviceGrid();
+    renderRules();
+    const msg = `ໂຫຼດແລ້ວ — ${STATE.devices.length} ອຸປະກອນ, ${STATE.rules.length} ກົດ`;
+    setStatus(true, msg);
+  }catch(e){
+    setStatus(false, 'ໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ');
+    toast('ໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ: ' + (e.message||e), true);
+  }
+}
+function setStatus(ok, text){
+  const homeText = `<span class="dot ${ok?'':'off'}"></span><span>${text}</span>`;
+  document.getElementById('homeStatusLine').innerHTML = homeText;
+  document.getElementById('statusLine').innerHTML = homeText;
+}
+document.getElementById('refreshHomeBtn').addEventListener('click', loadAll);
+async function loadRoomOrderPref(){
+  try{
+    const { data } = await sb.from('app_preferences').select('value').eq('key','room_order').maybeSingle();
+    if (data && Array.isArray(data.value)) STATE.roomOrder = data.value;
+  }catch(e){ /* non-fatal */ }
+}
+function openRoomOrderSettings(){
+  activeDetailDeviceId = null;
+  renderRoomOrderModal();
+  document.getElementById('deviceOverlay').classList.add('show');
+}
+function renderRoomOrderModal(){
+  const modal = document.getElementById('deviceModal');
+  const rooms = roomList();
+  modal.innerHTML = `
+    <h2 style="margin:0 0 4px;">ຈັດລຳດັບແທັບຫ້ອງ</h2>
+    <div class="modal-sub" style="margin-bottom:16px;">ກົດຄ້າງທີ່ ☰ ແລ້ວລາກຍ້າຍລຳດັບ</div>
+    <div id="roomOrderList" style="display:flex; flex-direction:column; gap:8px;">
+      ${rooms.map((r) => `
+        <div class="switch-row drag-row" data-drag-id="${escapeHtml(r)}">
+          <span>${escapeHtml(r)}</span>
+          <div class="drag-handle">☰</div>
+        </div>`).join('')}
+    </div>
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+  const closeBtn = modal.querySelector('#closeDetailBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
+  attachDragReorder(modal.querySelector('#roomOrderList'), '.drag-row', moveRoomOrder);
+}
+async function moveRoomOrder(room, direction){
+  const rooms = roomList();
+  const idx = rooms.indexOf(room);
+  const swapIdx = idx + direction;
+  if (idx<0 || swapIdx<0 || swapIdx>=rooms.length) return;
+  const tmp = rooms[idx]; rooms[idx] = rooms[swapIdx]; rooms[swapIdx] = tmp;
+  STATE.roomOrder = rooms;
+  renderRoomOrderModal();
+  renderRoomTabs();
+  try{
+    await sb.from('app_preferences').upsert({ key:'room_order', value: rooms, updated_at: new Date().toISOString() });
+  }catch(e){ toast('ບັນທຶກລຳດັບແທັບລົ້ມເຫຼວ', true); }
+}
+document.getElementById('roomOrderSettingsBtn').addEventListener('click', openRoomOrderSettings);
+
+document.getElementById('reorderModeBtn').addEventListener('click', () => {
+  STATE.reorderMode = !STATE.reorderMode;
+  document.getElementById('reorderModeBtn').classList.toggle('on', STATE.reorderMode);
+  toast(STATE.reorderMode ? 'ໂໝດຈັດລຳດັບ — ກົດຄ້າງທີ່ ☰ ແລ້ວລາກຍ້າຍ' : 'ອອກໂໝດຈັດລຳດັບແລ້ວ');
+  renderDeviceGrid();
+});
+async function moveDeviceOrder(tuyaId, direction){
+  let list = STATE.devices.slice().sort((a,b) => (a.sort_order||0)-(b.sort_order||0));
+  if (STATE.currentRoom === 'ໜ້າດ່ວນ') list = list.filter(d => d.is_favorite);
+  else if (STATE.currentRoom !== 'ທັງໝົດ') list = list.filter(d => d.room === STATE.currentRoom);
+  const idx = list.findIndex(d => d.tuya_device_id === tuyaId);
+  const swapIdx = idx + direction;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
+  const a = list[idx], b = list[swapIdx];
+  const aOrder = a.sort_order, bOrder = b.sort_order;
+  a.sort_order = bOrder; b.sort_order = aOrder;
+  renderDeviceGrid();
+  try{
+    await Promise.all([
+      sb.from('iot_devices').update({ sort_order: a.sort_order }).eq('id', a.id),
+      sb.from('iot_devices').update({ sort_order: b.sort_order }).eq('id', b.id),
+    ]);
+  }catch(e){ toast('ບັນທຶກລຳດັບລົ້ມເຫຼວ', true); }
+}
+document.getElementById('verifyAllBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('verifyAllBtn');
+  btn.disabled = true;
+  toast('ກຳລັງຢືນຢັນສະຖານະຈິງທັງໝົດ ອາດໃຊ້ເວລາ 10-20 ວິນາທີ...');
+  try{
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/refresh-all-device-status`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    });
+    const json = await res.json();
+    if (json.success) toast(`✅ ຢືນຢັນແລ້ວ ${json.refreshed}/${json.total} ໂຕ`);
+    else toast('ຢືນຢັນລົ້ມເຫຼວ: ' + (json.error||''), true);
+  }catch(e){
+    toast('ຢືນຢັນລົ້ມເຫຼວ: ' + (e.message||e), true);
+  }
+  await loadAll();
+  btn.disabled = false;
+});
+document.getElementById('refreshBtn').addEventListener('click', loadAll);
+
+// =====================================================================
+// PAGE: HOME — device grid
+// =====================================================================
+function categoryIcon(cat){
+  const map = { kg:'💡', tdq:'🚪', mcs:'🔒', dlq:'⚡', infrared_ac:'❄️', wnykq:'📡', hwktwkq:'📡' };
+  return map[cat] || '🔌';
+}
+function primarySwitches(dev){
+  const state = dev.current_state || {};
+  return Object.keys(state).filter(k => /^switch(_\d+)?$/.test(k)).sort();
+}
+function isPulseSwitch(dev){
+  // ໂຕ relay ແບບ "ກົດ" (ຄືປຸ່ມ remote) ບໍ່ຄ້າງສະຖານະ — Tuya ຮາຍງານ switch_type: "button"
+  return !!(dev.current_state && dev.current_state.switch_type === 'button');
+}
+function isControllable(dev){
+  return dev.category === 'infrared_ac' || primarySwitches(dev).length > 0;
+}
+function readingText(dev){
+  const s = dev.current_state || {};
+  const parts = [];
+  if (typeof s.temp_current === 'number') parts.push((s.temp_current/10).toFixed(1) + '°C');
+  if (typeof s.humidity_current === 'number') parts.push(s.humidity_current + '%');
+  if (typeof s.va_temperature === 'number') parts.push((s.va_temperature/10).toFixed(1) + '°C');
+  if (typeof s.cur_power === 'number') parts.push((s.cur_power/10).toFixed(1) + 'W');
+  if (s.doorcontact_state !== undefined) parts.push(s.doorcontact_state ? 'ເປີດ' : 'ປິດ');
+  return parts.join(' · ');
+}
+
+function roomList(){
+  const rooms = Array.from(new Set(STATE.devices.map(d => d.room).filter(Boolean)));
+  const allTabs = ['ທັງໝົດ', 'ໜ້າດ່ວນ', ...rooms.sort()];
+  if (STATE.roomOrder && STATE.roomOrder.length){
+    const known = STATE.roomOrder.filter(r => allTabs.includes(r));
+    const missing = allTabs.filter(r => !known.includes(r));
+    return [...known, ...missing];
+  }
+  return allTabs;
+}
+function renderRoomTabs(){
+  const box = document.getElementById('roomTabs');
+  const rooms = roomList();
+  if (!rooms.includes(STATE.currentRoom)) STATE.currentRoom = 'ໜ້າດ່ວນ';
+  box.innerHTML = rooms.map(r => `<button class="room-chip ${r===STATE.currentRoom?'active':''}" data-room="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
+  box.querySelectorAll('.room-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      STATE.currentRoom = chip.dataset.room;
+      renderRoomTabs();
+      renderDeviceGrid();
+    });
+  });
+}
+
+function renderDeviceGrid(){
+  const grid = document.getElementById('deviceGrid');
+  let list = STATE.devices.slice().sort((a,b) => (a.sort_order||0)-(b.sort_order||0));
+  if (STATE.currentRoom === 'ໜ້າດ່ວນ') list = list.filter(d => d.is_favorite);
+  else if (STATE.currentRoom !== 'ທັງໝົດ') list = list.filter(d => d.room === STATE.currentRoom);
+
+  if (list.length === 0){
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1;"><b>ບໍ່ມີອຸປະກອນ</b>${STATE.currentRoom==='ໜ້າດ່ວນ' ? 'ກົດຮູບດາວ ⭐ ຢູ່ອຸປະກອນທີ່ຢາກປັກໝຸດໄວ້ໜ້ານີ້' : 'ບໍ່ມີອຸປະກອນໃນໝວດນີ້'}</div>`;
+    return;
+  }
+
+  if (STATE.reorderMode){
+    grid.innerHTML = list.map((dev) => `
+      <div class="device-card drag-row" data-tid="${dev.tuya_device_id}" data-drag-id="${dev.tuya_device_id}">
+        <div class="card-top"><div class="device-ic">${categoryIcon(dev.category)}</div></div>
+        <div>
+          <div class="name">${escapeHtml(dev.name)}</div>
+          <div class="room-tag">${escapeHtml(dev.room || 'ບໍ່ໄດ້ຈັດຫ້ອງ')}</div>
+        </div>
+        <div class="card-bottom" style="justify-content:center;">
+          <div class="drag-handle">☰</div>
+        </div>
+      </div>`).join('');
+    attachDragReorder(grid, '.drag-row', moveDeviceOrder);
+    return;
+  }
+
+  grid.innerHTML = list.map(dev => {
+    const isGate4ch = !!GATE_4CH_LABELS[dev.tuya_device_id];
+    const pulse = isPulseSwitch(dev);
+    const controllable = isControllable(dev) && !isGate4ch; // ປະຕູ 4-ຊ່ອງ: ໃຫ້ກົດເຂົ້າໜ້າລະອຽດແທນ, ບໍ່ໃຊ້ປຸ່ມດ່ວນ
+    const switches = primarySwitches(dev);
+    // v1.05 (Tar 2026-08-31, "ພົບບັນຫາເມື່ອມີປຸ່ມໃດ1ໃນສະວິກເປີດແຕ່ໄອຄອນໜ້າວະວິກພັດບໍ່ເປີດນຳ"): was
+    // only checking switches[0] — a light with 3 bulbs (switch_1/2/3) stayed showing "off" on
+    // the card icon whenever only switch_2 or switch_3 was on, since switch_1 itself was off.
+    // Card icon should reflect "any bulb on" like the ດອກ1/2/3 detail view already does.
+    const mainOn = pulse ? false : (dev.category === 'infrared_ac'
+      ? (dev.current_state && dev.current_state.power == 1)
+      : (switches.length ? switches.some(code => !!(dev.current_state||{})[code]) : false));
+    const reading = readingText(dev);
+    return `
+    <div class="device-card" data-tid="${dev.tuya_device_id}">
+      <button class="fav-star ${dev.is_favorite?'on':''}" data-tid="${dev.tuya_device_id}">${dev.is_favorite?'★':'☆'}</button>
+      <div class="card-top">
+        <div class="device-ic">${categoryIcon(dev.category)}</div>
+      </div>
+      <div>
+        <div class="name">${escapeHtml(dev.name)}</div>
+        <div class="room-tag">${escapeHtml(dev.room || 'ບໍ່ໄດ້ຈັດຫ້ອງ')}</div>
+        ${reading ? `<div class="reading">${escapeHtml(reading)}</div>` : ''}
+      </div>
+      <div class="card-bottom">
+        ${controllable
+          ? `<button class="power-toggle ${mainOn?'on':''}" data-tid="${dev.tuya_device_id}" data-quick="1" data-pulse="${pulse?'1':'0'}">⏻</button>`
+          : `<span class="no-power"></span>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.device-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.fav-star') || e.target.closest('.power-toggle')) return;
+      openDeviceDetail(card.dataset.tid);
+    });
+  });
+  grid.querySelectorAll('.fav-star').forEach(star => {
+    star.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const dev = deviceByTuyaId(star.dataset.tid);
+      const newVal = !dev.is_favorite;
+      star.textContent = newVal ? '★' : '☆';
+      star.classList.toggle('on', newVal);
+      dev.is_favorite = newVal;
+      const { error } = await sb.from('iot_devices').update({ is_favorite: newVal }).eq('id', dev.id);
+      if (error){ toast('ອັບເດດລົ້ມເຫຼວ', true); return; }
+      if (STATE.currentRoom === 'ໜ້າດ່ວນ') renderDeviceGrid();
+    });
+  });
+  grid.querySelectorAll('.power-toggle[data-quick]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const dev = deviceByTuyaId(btn.dataset.tid);
+      await quickToggle(dev, btn);
+    });
+  });
+}
+
+function statusValue(deviceStatus, code, fallback){
+  if (!Array.isArray(deviceStatus)) return fallback;
+  const found = deviceStatus.find(s => s.code === code);
+  return found ? found.value : fallback;
+}
+
+async function quickToggle(dev, btnEl){
+  btnEl.disabled = true;
+  const pulse = btnEl.dataset.pulse === '1';
+  const switches = primarySwitches(dev);
+  const code = switches[0] || 'switch_1';
+  try{
+    if (pulse){
+      await callDeviceCommand(dev.tuya_device_id, [{ code, value: true }]);
+      toast('ສົ່ງຄຳສັ່ງແລ້ວ');
+      logActivity('ກົດປຸ່ມ ' + dev.name, code);
+    } else if (dev.category === 'infrared_ac'){
+      const turningOn = !btnEl.classList.contains('on');
+      await callAcCommand(dev.tuya_device_id, [{ code:'power', value: turningOn ? 1 : 0 }]);
+      dev.current_state = Object.assign({}, dev.current_state, { power: turningOn ? 1 : 0 });
+      btnEl.classList.toggle('on', turningOn);
+      toast(turningOn ? 'ເປີດແລ້ວ' : 'ປິດແລ້ວ');
+      logActivity((turningOn?'ເປີດ':'ປິດ') + ' ' + dev.name);
+    } else {
+      const requestedOn = !btnEl.classList.contains('on');
+      const result = await callDeviceCommand(dev.tuya_device_id, [{ code, value: requestedOn }]);
+      const confirmedOn = statusValue(result.deviceStatus, code, requestedOn);
+      dev.current_state = Object.assign({}, dev.current_state, { [code]: confirmedOn });
+      btnEl.classList.toggle('on', !!confirmedOn);
+      if (confirmedOn !== requestedOn) toast('⚠️ ອຸປະກອນຕອບຄືນຄ່າຕ່າງຈາກທີ່ສັ່ງ — ອາດຕ້ອງລອງໃໝ່', true);
+      else toast(confirmedOn ? 'ເປີດແລ້ວ' : 'ປິດແລ້ວ');
+      logActivity((confirmedOn?'ເປີດ':'ປິດ') + ' ' + dev.name);
+    }
+  }catch(e){
+    toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+  }finally{
+    btnEl.disabled = false;
+  }
+}
+
+async function callDeviceCommand(tuyaDeviceId, commands, skipConfirm){
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-device-command`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    body: JSON.stringify({ device_id: tuyaDeviceId, commands, skipConfirm: !!skipConfirm }),
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.msg || json.error || 'ຄຳສັ່ງລົ້ມເຫຼວ');
+  return json;
+}
+async function callAcCommand(acTuyaDeviceId, commands){
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-ac-command`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    body: JSON.stringify({ ac_tuya_device_id: acTuyaDeviceId, commands }),
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'ຄຳສັ່ງແອລົ້ມເຫຼວ');
+  return json;
+}
+
+// ---------- device detail modal ----------
+let activeDetailDeviceId = null; // ໃຫ້ realtime ຮູ້ວ່າໜ້າລະອຽດໂຕໃດເປີດຄ້າງຢູ່
+let activeDetailLiveUpdate = null; // callback ອັບເດດ UI ຂອງໜ້ານັ້ນ ຕອນມີຂໍ້ມູນໃໝ່ເຂົ້າມາ
+let activeGateSensorRefresh = null; // callback ອັບເດດ badge sensor ໃນໜ້າລະອຽດປະຕູ (ຄົນລະໂຕກັບປະຕູເອງ)
+let openingDetailInFlight = false; // ກັນ openDeviceDetail ຮັນຊ້ອນກັນ (ຄລິກ 2 ຄັ້ງໄວ/synthetic event ຊ້ຳ) —
+// ຖ້າຮັນຊ້ອນ, wireGateDetail() ຈະຕິດ listener ຊ້ຳ 2 ອັນໃສ່ປຸ່ມດຽວກັນ, ພໍກົດເທື່ອດຽວ
+// ຄຳສັ່ງເລີຍອອກໄປ 2 ຄັ້ງ (ນີ້ຄືສາເຫດ % ແລ່ນ 0→1→3 ແລ້ວໂດດຄືນ 0 ກ່ອນຈະຂຶ້ນຕໍ່ຈິງ)
+
+async function openDeviceDetail(tuyaId){
+  if (openingDetailInFlight) return;
+  const dev = deviceByTuyaId(tuyaId);
+  if (!dev) return;
+  openingDetailInFlight = true;
+  try{
+  if (activeGateStopTick){ activeGateStopTick(); activeGateStopTick = null; }
+  activeDetailDeviceId = dev.id;
+  activeDetailLiveUpdate = null;
+  const modal = document.getElementById('deviceModal');
+  document.getElementById('deviceOverlay').classList.add('show');
+
+  if (GATE_CONTROL_DEVICES[tuyaId]){
+    modal.innerHTML = gateDetailLoadingHtml(dev);
+    const [config, state] = await Promise.all([fetchGateConfig(tuyaId), fetchGateState(tuyaId)]);
+    // ບໍ່ຕ້ອງແກ້ໄຂຄ່າ is_moving ຄ້າງເອງອີກຕໍ່ໄປ — computeLiveGatePosition ຄິດຈາກເວລາຈິງທຸກຄັ້ງ
+    // ຢູ່ແລ້ວ (elapsed ເກີນໄລຍະເວລາເຕັມທີ່ = ຖືກຕີວ່າ isMoving:false ໂດຍອັດຕະໂນມັດ, ບໍ່ຄ້າງຜິດອີກ)
+    modal.innerHTML = gateDetailHtml(dev, config, state);
+    wireGateDetail(dev, config, state);
+    return;
+  }
+  if (dev.category === 'infrared_ac'){
+    modal.innerHTML = acDetailHtml(dev);
+    wireAcDetail(dev);
+  } else if (dev.category === 'dlq'){
+    modal.innerHTML = meterDetailHtml(dev);
+    wireMeterDetail(dev);
+    verifyLiveInBackground(dev, () => { modal.innerHTML = meterDetailHtml(dev); wireMeterDetail(dev); });
+  } else if (dev.category === 'mcs'){
+    modal.innerHTML = sensorDetailHtml(dev);
+    wireSensorDetail(dev);
+    verifyLiveInBackground(dev, () => { modal.innerHTML = sensorDetailHtml(dev); wireSensorDetail(dev); });
+  } else if (primarySwitches(dev).length){
+    modal.innerHTML = switchDetailHtml(dev);
+    wireSwitchDetail(dev);
+    verifyLiveInBackground(dev, () => { modal.innerHTML = switchDetailHtml(dev); wireSwitchDetail(dev); });
+  } else {
+    modal.innerHTML = readonlyDetailHtml(dev);
+  }
+  } finally {
+    openingDetailInFlight = false;
+  }
+}
+// ສະແດງຄ່າທີ່ມີຢູ່ແລ້ວທັນທີ (ບໍ່ຕ້ອງລໍ) ແລ້ວກວດຄ່າຈິງຈາກ Tuya ຢູ່ເບື້ອງຫຼັງ — ຖ້າພົບວ່າຄ່າຄ້າງ
+// ຜິດ (ບໍ່ຄືກັນ) ຄ່ອຍແກ້ໜ້າຈໍໃຫ້ຖືກຕ້ອງແບບງຽບໆ (ໄດ້ທັງໄວ ແລະຖືກຕ້ອງ, ບໍ່ຕ້ອງເລືອກຢ່າງໃດຢ່າງໜຶ່ງ)
+function verifyLiveInBackground(dev, onChanged){
+  const beforeJson = JSON.stringify(dev.current_state || {});
+  refreshSingleDeviceLive(dev).then(() => {
+    if (activeDetailDeviceId !== dev.id) return; // ອອກຈາກໜ້ານີ້ໄປແລ້ວ, ບໍ່ຕ້ອງແກ້
+    if (JSON.stringify(dev.current_state || {}) !== beforeJson){
+      onChanged();
+      // ບໍ່ໄດ້ອັບເດດ grid ຫຼັກນຳ (ອັນນີ້ຄືສາເຫດ "ໄອຄອນນອກບໍ່ເປີດ ທັ້ງທີ່ທາງໃນມີການເປີດ" — verify
+      // ພົບວ່າຄ່າຄ້າງຢູ່ຜິດ, ແກ້ dev.current_state ຖືກຕ້ອງແລ້ວ ແລະ render ໜ້າລະອຽດຄືນ, ແຕ່ລືມ
+      // render grid ຫຼັກນຳ ໄອຄອນນອກເລີຍຄ້າງຄ່າເກົ່າຕໍ່ໄປຈົນກວ່າຈະມີ event ອື່ນມາ render ຄືນ)
+      renderDeviceGrid();
+    }
+  });
+}
+async function refreshSingleDeviceLive(dev){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/refresh-single-device-status`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+      body: JSON.stringify({ device_id: dev.tuya_device_id }),
+    });
+    const json = await res.json();
+    if (json.success && json.current_state) dev.current_state = json.current_state;
+  }catch(e){ /* ບໍ່ໃຫ້ error ຢຸດການເປີດໜ້າ — ໃຊ້ຄ່າຄ້າງໄວ້ຖ້າດຶງບໍ່ໄດ້ */ }
+}
+function wireSensorDetail(dev){
+  const modal = document.getElementById('deviceModal');
+  const closeBtn = modal.querySelector('#closeDetailBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
+
+  activeDetailLiveUpdate = (row) => {
+    dev.current_state = row.current_state || {};
+    dev.is_online = row.is_online;
+    const s = dev.current_state;
+    const isOpen = !!s.doorcontact_state;
+    const svgWrap = modal.querySelector('.sensor-svg-wrap');
+    if (svgWrap) animateSensorGap(svgWrap, isOpen);
+    const pill = modal.querySelector('#sensorStatusPill');
+    if (pill){
+      pill.className = 'sensor-status-pill ' + (isOpen?'open':'closed');
+      pill.innerHTML = `<span>${isOpen?'🔔':'🔕'}</span> ${isOpen?'ເປີດ':'ປິດ'}`;
+    }
+    const battery = s.battery_state || s.battery_percentage;
+    const batteryText = battery === 'high' ? 'ສູງ' : battery === 'middle' ? 'ກາງ' : battery === 'low' ? 'ຕ່ຳ — ຄວນປ່ຽນແບັດ' : (battery!==undefined ? battery+'%' : 'ບໍ່ຮູ້');
+    const infoRow = modal.querySelector('#sensorInfoRow');
+    if (infoRow) infoRow.innerHTML = `<span>🔋 ແບັດ: ${batteryText}</span><span>${dev.is_online?'🟢 ອອນລາຍ':'⚪ ອອບລາຍ'}</span>`;
+    renderDeviceGrid();
+  };
+}
+function closeDeviceDetail(){
+  if (activeGateStopTick){ activeGateStopTick(); activeGateStopTick = null; }
+  activeDetailDeviceId = null;
+  activeDetailLiveUpdate = null;
+  activeGateSensorRefresh = null;
+  document.getElementById('deviceOverlay').classList.remove('show');
+}
+document.getElementById('deviceOverlay').addEventListener('click', (e) => { if (e.target.id==='deviceOverlay') closeDeviceDetail(); });
+
+function switchDetailHtml(dev){
+  const switches = primarySwitches(dev);
+  const state = dev.current_state || {};
+  const head = `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'ບໍ່ໄດ້ຈັດຫ້ອງ')}</div>
+      </div>
+    </div>`;
+  const footer = `<div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>`;
+
+  // ຮູບແບບ 1: ປະຕູ 4-ຊ່ອງ ທີ່ຮູ້ຈັກ — grid ປຸ່ມ ເປີດ/ປິດ/ຢຸດ/ລ໋ອກ ຄືກັນ Smart Life
+  if (GATE_4CH_LABELS[dev.tuya_device_id]){
+    const btns = GATE_4CH_LABELS[dev.tuya_device_id];
+    return head + `
+      <div class="gate-grid">
+        ${btns.map(b => `<button class="gate-btn" data-code="${b.code}"><span class="gate-ic">${b.icon}</span>${b.label}</button>`).join('')}
+      </div>
+      <div class="hint">ກົດເພື່ອສັ່ງ — ຄືກົດ remote, ບໍ່ຄ້າງສະຖານະ</div>
+    ` + footer;
+  }
+
+  // ຮູບແບບ 2: switch ດຽວ — ປຸ່ມສີ່ຫຼ່ຽມໃຫຍ່ກາງຈໍ
+  if (switches.length === 1){
+    const code = switches[0];
+    const pulse = isPulseSwitch(dev);
+    const on = !!state[code];
+    return head + `
+      <div class="big-toggle-wrap">
+        <button class="big-toggle ${(!pulse && on) ? 'on':''}" data-code="${code}" data-pulse="${pulse?'1':'0'}">${pulse ? 'ກົດ' : (on?'ON':'OFF')}</button>
+        <div class="big-toggle-label">${pulse ? 'ກົດເພື່ອສັ່ງ (ບໍ່ຄ້າງສະຖານະ)' : escapeHtml(switchLabel(dev, code, code))} <button type="button" class="rename-btn-inline" data-code="${code}" title="ປ່ຽນຊື່">✏️</button></div>
+      </div>
+    ` + footer;
+  }
+
+  // ຮູບແບບ 3: ໄຟຫຼາຍດອກ — ກາດຫຼອດໄຟລຽນກັນ ຄືກັນ Smart Life
+  return head + `
+    <div class="bulb-grid">
+      ${switches.map((code,i) => `
+        <div class="bulb-card ${state[code]?'on':''}" data-code="${code}">
+          <button type="button" class="bulb-rename-btn" data-code="${code}" title="ປ່ຽນຊື່">✏️</button>
+          <div class="bulb-ic">💡</div>
+          <div class="bulb-name">${escapeHtml(switchLabel(dev, code, 'ດອກ '+(i+1)))}</div>
+        </div>`).join('')}
+    </div>
+  ` + footer;
+}
+
+function wireSwitchDetail(dev){
+  const modal = document.getElementById('deviceModal');
+  const closeBtn = modal.querySelector('#closeDetailBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
+
+  // ປ່ຽນຊື່ປຸ່ມສະວິດ (ດອກ1/2/3 ຫຼື label ໂຕດຽວ) — ໃຊ້ໄດ້ທຸກຮູບແບບ (bulb-card ຫຼື big-toggle)
+  modal.querySelectorAll('.bulb-rename-btn, .rename-btn-inline').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const code = btn.dataset.code;
+      const current = switchLabel(dev, code, '');
+      const next = window.prompt('ຕັ້ງຊື່ໃໝ່ໃຫ້ປຸ່ມນີ້ (ປະຫວ່າງໄວ້ = ໃຊ້ຊື່ default):', current);
+      if (next === null) return; // ຍົກເລີກ
+      const trimmed = next.trim();
+      const newLabels = Object.assign({}, dev.switch_labels || {});
+      if (trimmed) newLabels[code] = trimmed; else delete newLabels[code];
+      const { error } = await sb.from('iot_devices').update({ switch_labels: newLabels }).eq('id', dev.id);
+      if (error){ toast('ປ່ຽນຊື່ລົ້ມເຫຼວ', true); return; }
+      dev.switch_labels = newLabels;
+      toast('ປ່ຽນຊື່ແລ້ວ');
+      logActivity('ປ່ຽນຊື່ປຸ່ມ ' + dev.name, code + ' → ' + (trimmed||'(default)'));
+      modal.innerHTML = switchDetailHtml(dev);
+      wireSwitchDetail(dev);
+      renderDeviceGrid();
+    });
+  });
+
+  // ຮູບແບບ 1: ປຸ່ມປະຕູ 4-ຊ່ອງ (pulse ຢ່າງດຽວ, ບໍ່ຄ້າງສະຖານະ)
+  modal.querySelectorAll('.gate-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try{
+        await callDeviceCommand(dev.tuya_device_id, [{ code: btn.dataset.code, value: true }]);
+        toast('ສົ່ງຄຳສັ່ງແລ້ວ');
+        logActivity('ກົດ ' + dev.name + ' (' + btn.dataset.code + ')');
+      }catch(e){
+        toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+      }finally{
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // ຮູບແບບ 2: ປຸ່ມສີ່ຫຼ່ຽມໃຫຍ່ (pulse ຫຼື toggle ຕາມປະເພດ)
+  const bigBtn = modal.querySelector('.big-toggle');
+  if (bigBtn){
+    bigBtn.addEventListener('click', async () => {
+      const code = bigBtn.dataset.code;
+      const pulse = bigBtn.dataset.pulse === '1';
+      bigBtn.disabled = true;
+      try{
+        if (pulse){
+          await callDeviceCommand(dev.tuya_device_id, [{ code, value: true }]);
+          toast('ສົ່ງຄຳສັ່ງແລ້ວ');
+          logActivity('ກົດ ' + dev.name);
+        } else {
+          const requestedVal = !bigBtn.classList.contains('on');
+          const result = await callDeviceCommand(dev.tuya_device_id, [{ code, value: requestedVal }]);
+          const confirmedVal = statusValue(result.deviceStatus, code, requestedVal);
+          bigBtn.classList.toggle('on', !!confirmedVal);
+          bigBtn.textContent = confirmedVal ? 'ON' : 'OFF';
+          dev.current_state = Object.assign({}, dev.current_state, { [code]: confirmedVal });
+          renderDeviceGrid();
+          if (confirmedVal !== requestedVal) toast('⚠️ ອຸປະກອນຕອບຄືນຄ່າຕ່າງຈາກທີ່ສັ່ງ — ອາດຕ້ອງລອງໃໝ່', true);
+          else toast(confirmedVal ? 'ເປີດແລ້ວ' : 'ປິດແລ້ວ');
+          logActivity((confirmedVal?'ເປີດ':'ປິດ') + ' ' + dev.name);
+        }
+      }catch(e){
+        toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+      }finally{
+        bigBtn.disabled = false;
+      }
+    });
+  }
+
+  // ຮູບແບບ 3: ກາດຫຼອດໄຟ (toggle)
+  modal.querySelectorAll('.bulb-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      const code = card.dataset.code;
+      const requestedVal = !card.classList.contains('on');
+      try{
+        const result = await callDeviceCommand(dev.tuya_device_id, [{ code, value: requestedVal }]);
+        const confirmedVal = statusValue(result.deviceStatus, code, requestedVal);
+        card.classList.toggle('on', !!confirmedVal);
+        dev.current_state = Object.assign({}, dev.current_state, { [code]: confirmedVal });
+        renderDeviceGrid();
+        if (confirmedVal !== requestedVal) toast('⚠️ ອຸປະກອນຕອບຄືນຄ່າຕ່າງຈາກທີ່ສັ່ງ — ອາດຕ້ອງລອງໃໝ່', true);
+        else toast(confirmedVal ? 'ເປີດແລ້ວ' : 'ປິດແລ້ວ');
+        logActivity((confirmedVal?'ເປີດ':'ປິດ') + ' ' + dev.name + ' (' + code + ')');
+      }catch(e){
+        toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+      }
+    });
+  });
+}
+
+// =====================================================================
+// ປະຕູ animation + % (ໃຊ້ gate_position_config / gate_position_state ຮ່ວມກັບລະບົບ Sykhai)
+// =====================================================================
+async function fetchGateConfig(tuyaId){
+  const { data } = await sb.from('gate_position_config').select('*').eq('device_id', tuyaId).maybeSingle();
+  return data;
+}
+async function fetchGateState(tuyaId){
+  const { data } = await sb.from('gate_position_state').select('*').eq('device_id', tuyaId).maybeSingle();
+  return data;
+}
+async function updateGateState(tuyaId, patch){
+  try{
+    await sb.from('gate_position_state').update(Object.assign({ updated_at: new Date().toISOString() }, patch)).eq('device_id', tuyaId);
+  }catch(e){ /* non-fatal */ }
+}
+async function logGateCommand(tuyaId){
+  // ບັນທຶກຄືກັນ Marketing Studio ເພື່ອໃຫ້ລະບົບ security-alert ເກົ່າຮູ້ວ່າແມ່ນແອັບເຮົາເອງສັ່ງ ບໍ່ແມ່ນຄົນນອກ
+  try{
+    await sb.from('gate_events').insert({ event_type:'command_sent', source:'system', device_id: tuyaId, triggered_by:'smart_home_app' });
+  }catch(e){ /* non-fatal */ }
+}
+
+// ປະຕູສະໄລ້ (ຄືປະຕູຮົ້ວນ້ອຍ) — ບານເລື່ອນຂ້າງລະຫວ່າງເສົາ 2 ຕົ້ນ, ເປີດຈາກຊ້າຍຫາຂວາ (ບານຫົດເຂົ້າຫາເສົາຂວາ)
+function gateSvgSliding(pct){
+  const openWidth = 168;
+  const visibleWidth = Math.round(openWidth * (1 - pct/100));
+  const panelX = 26 + (openWidth - visibleWidth);
+  return `
+    <svg viewBox="0 0 220 200" width="100%">
+      <defs>
+        <clipPath id="gateClip"><rect x="26" y="70" width="${openWidth}" height="100"/></clipPath>
+        <pattern id="vbars" width="14" height="100" patternUnits="userSpaceOnUse">
+          <rect width="14" height="100" fill="#2b3238"/>
+          <rect width="3" height="100" x="5.5" fill="#00000050"/>
+        </pattern>
+      </defs>
+      <rect x="0" y="20" width="220" height="130" fill="#bfe3f5"/>
+      <rect x="0" y="150" width="220" height="30" fill="#8fce8f"/>
+      <g clip-path="url(#gateClip)">
+        <rect id="slidePanel" x="${panelX}" y="70" width="${visibleWidth}" height="100" fill="url(#vbars)"/>
+      </g>
+      <rect x="14" y="60" width="12" height="120" rx="4" fill="#e8ddc7"/>
+      <circle cx="20" cy="58" r="10" fill="#e8ddc7"/>
+      <rect x="194" y="60" width="12" height="120" rx="4" fill="#e8ddc7"/>
+      <circle cx="200" cy="58" r="10" fill="#e8ddc7"/>
+    </svg>`;
+}
+// ປະຕູມ້ວນ (ຄືປະຕູຮ້ານໃໝ່) — ບານມ້ວນຂຶ້ນເກັບຢູ່ກ່ອງເທິງ
+function gateSvgRoller(pct){
+  const shutterHeight = Math.round(160 * (1 - pct/100));
+  return `
+    <svg viewBox="0 0 220 200" width="100%">
+      <defs>
+        <clipPath id="frameClip"><rect x="20" y="20" width="180" height="160" rx="4"/></clipPath>
+        <pattern id="stripes" width="180" height="14" patternUnits="userSpaceOnUse">
+          <rect width="180" height="14" fill="#c9902f"/>
+          <rect width="180" height="1.5" y="13" fill="#00000030"/>
+        </pattern>
+      </defs>
+      <rect x="20" y="20" width="180" height="160" rx="4" fill="#0d1114" stroke="#3a464e" stroke-width="2"/>
+      <rect x="16" y="8" width="188" height="16" rx="3" fill="#3a464e"/>
+      <g clip-path="url(#frameClip)">
+        <rect id="shutterRect" class="gate-shutter" x="20" y="20" width="180" height="${shutterHeight}" fill="url(#stripes)"/>
+      </g>
+    </svg>`;
+}
+function gateSvgFor(gc, pct){
+  return gc.type === 'single' ? gateSvgSliding(pct) : gateSvgRoller(pct);
+}
+// ---------------------------------------------------------------------
+// ຄິດໄລ່ຕຳແໜ່ງປະຕູ — ພອດຈາກ computeLiveGatePosition ຂອງລະບົບ Sykhai ເປະ (pure function,
+// ຄິດຈາກ state/config/ເວລາປັດຈຸບັນທຸກຄັ້ງ ບໍ່ຕິດຕາມຕົວແປ local — ບໍ່ຄ້າງຜິດ, self-heal ອັດຕະໂນມັດ)
+// ---------------------------------------------------------------------
+function computeLiveGatePosition(state, config, nowMs){
+  if (!state) return { position:0, direction:'closing', isMoving:false };
+  if (!state.is_moving) return { position: Number(state.position_pct)||0, direction: state.direction, isMoving:false };
+  const elapsedSec = Math.max(0, (nowMs - new Date(state.command_started_at).getTime())/1000);
+  const travel = state.direction === 'opening' ? config.open_travel_seconds : config.close_travel_seconds;
+  const rate = 100/travel;
+  const rawPos = state.direction === 'opening'
+    ? Number(state.position_pct) + elapsedSec*rate
+    : Number(state.position_pct) - elapsedSec*rate;
+  if (state.direction === 'opening' && rawPos >= 100) return { position:100, direction: state.direction, isMoving:false };
+  if (state.direction === 'closing' && rawPos <= 0) return { position:0, direction: state.direction, isMoving:false };
+  return { position: Math.max(0, Math.min(100, rawPos)), direction: state.direction, isMoving:true };
+}
+function gateStatusText(live){
+  if (live.isMoving) return `ກຳລັງ${live.direction==='opening'?'ເປີດ':'ປິດ'}... (~${Math.round(live.position)}%)`;
+  if (live.position>=99.5) return 'ປະຕູເປີດຢູ່';
+  if (live.position<=0.5) return 'ປະຕູປິດຢູ່';
+  return `ຄ້າງຢູ່ກາງທາງ (${Math.round(live.position)}%)`;
+}
+
+const GATE_APP_USER_ID = 'smarthome_app';
+const GATE_APP_USER_NAME = 'Smart Home App';
+async function callGateControl(deviceId){
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/tuya-gate-control`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    body: JSON.stringify({ deviceId, userId:GATE_APP_USER_ID, userName:GATE_APP_USER_NAME }),
+  });
+  return await res.json();
+}
+async function callGateDirectControl(deviceId, action){
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/tuya-gate-direct-control`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    body: JSON.stringify({ deviceId, action, userId:GATE_APP_USER_ID, userName:GATE_APP_USER_NAME }),
+  });
+  return await res.json();
+}
+async function callGateOpenToPercent(deviceId, targetPct){
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/tuya-gate-open-to-percent`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    body: JSON.stringify({ deviceId, targetPercent: targetPct, triggeredBy: GATE_APP_USER_NAME }),
+  });
+  return await res.json();
+}
+
+let activeGateStopTick = null; // ໃຫ້ closeDeviceDetail/openDeviceDetail ຢຸດ ticker ເກົ່າໄດ້
+
+function gateDetailLoadingHtml(dev){
+  return `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'')}</div>
+      </div>
+    </div>
+    <div class="hint">ກຳລັງໂຫຼດ...</div>
+  `;
+}
+function gateDetailHtml(dev, config, state){
+  const gc = GATE_CONTROL_DEVICES[dev.tuya_device_id];
+  const cfg = config || {open_travel_seconds:26, close_travel_seconds:26, quick_open_pct:20};
+  const live = computeLiveGatePosition(state, cfg, Date.now());
+  const pct = Math.round(live.position);
+  const buttonsHtml = gc.type === 'single'
+    ? `<div class="gate-btn-row"><button class="btn" id="gateToggleBtn" style="flex:1;">🚪 ເປີດ / ປິດ ${escapeHtml(dev.name)}</button></div>`
+    : `<div class="gate-btn-row">
+         <button class="btn" id="gateOpenBtn">▲ ເປີດ</button>
+         <button class="btn" id="gateStopBtn">⏸ ຢຸດ</button>
+         <button class="btn" id="gateCloseBtn">▼ ປິດ</button>
+       </div>`;
+  // ປຸ່ມ % ດ່ວນ ມີສະເພາະ gate ປະເພດ single (ຄືລະບົບ Sykhai ຈິງ — 4-ຊ່ອງບໍ່ມີ tuya-gate-open-to-percent ຮອງຮັບ)
+  // ເອົາ input+"ໄປ %" ອອກ ຕາມທີ່ Tar ຂໍ (ຄິດວ່າຊ້ຳກັບປຸ່ມດ່ວນທີ່ແກ້ຄ່າໄດ້ຢູ່ແລ້ວຜ່ານ ✏️)
+  const quickRow = gc.type === 'single' ? `
+      <div class="gate-quick-row">
+        ${cfg.quick_open_pct ? `<button class="btn btn-accent" id="gateQuickBtn" style="flex:1;">ເປີດ ${cfg.quick_open_pct}%</button>` : ''}
+        <button type="button" class="rename-btn-inline" id="editQuickPctBtn" title="ປ່ຽນຄ່າເປີເຊັນດ່ວນ">✏️</button>
+      </div>
+  ` : '';
+  const hasSensor = !!GATE_SENSOR_PAIR[dev.tuya_device_id];
+  const sensorInitialOpen = hasSensor && !!((STATE.devices.find(d=>d.tuya_device_id===GATE_SENSOR_PAIR[dev.tuya_device_id])||{}).current_state||{}).doorcontact_state;
+  return `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'')}</div>
+      </div>
+    </div>
+    <div class="gate-visual">
+      ${hasSensor ? `
+        <div class="gate-sensor-row">
+          <div class="sensor-mini-wrap" id="sensorMiniWrap">${sensorSvg(sensorInitialOpen)}</div>
+          <div class="sensor-badge" id="sensorBadge"><span class="dot"></span><span id="sensorBadgeText">ກຳລັງກວດ sensor...</span></div>
+        </div>
+      ` : ''}
+      <div class="gate-svg-wrap ${hasSensor?'gate-svg-wrap-lg':''}">${gateSvgFor(gc, pct)}</div>
+      <div class="gate-pct-row">
+        <div class="gate-pct-label" id="gatePctLabel">${pct}%</div>
+        <div class="gate-status-label ${live.isMoving?'moving':''}" id="gateStatusLabel">${live.isMoving?'<span class="pulse-dot"></span>':''}${gateStatusText(live)}</div>
+      </div>
+      ${buttonsHtml}
+      ${quickRow}
+      <div class="hint">ໃຊ້ Edge Function ດຽວກັນກັບລະບົບ Sykhai (tuya-gate-control)</div>
+    </div>
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+}
+function wireGateDetail(dev, config, state){
+  const modal = document.getElementById('deviceModal');
+  const gc = GATE_CONTROL_DEVICES[dev.tuya_device_id];
+  const closeBtn = modal.querySelector('#closeDetailBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
+
+  let liveState = state;
+  let liveConfig = config || {open_travel_seconds:26, close_travel_seconds:26, physical_press_delay_ms:1800, quick_open_pct:20};
+  let tickTimer = null;
+  // ຕັ້ງໄວ້ຕອນກົດ "ໄປ %"/"ເປີດ X%" — ໃຫ້ animation ໃນເຄື່ອງຢຸດທີ່ເປົ້າໝາຍເອງ (ຄືກັນເຊີບເວີແທ້ຈະ
+  // ຢຸດ) ບໍ່ແມ່ນເຄື່ອນທີ່ບໍ່ຢຸດຈົນກວ່າຄ່າຈິງຈາກເຊີບເວີມາແກ້ຄືນ (ນັ້ນຄືສາເຫດທີ່ເຫັນ % ແລ່ນເກີນເປົ້າ
+  // ໝາຍແລ້ວໂດດຖອຍຄືນ — animation ບໍ່ຮູ້ຈັກເປົ້າໝາຍ, ຮູ້ແຕ່ວ່າ "ກຳລັງເປີດ" ຢູ່ຢ່າງດຽວ)
+  let predictedTargetPct = null;
+
+  function renderSensorBadge(){
+    const sensorTid = GATE_SENSOR_PAIR[dev.tuya_device_id];
+    if (!sensorTid) return;
+    const badge = modal.querySelector('#sensorBadge');
+    const textEl = modal.querySelector('#sensorBadgeText');
+    if (!badge || !textEl) return;
+    const sensorDev = STATE.devices.find(d => d.tuya_device_id === sensorTid);
+    if (!sensorDev || sensorDev.current_state == null || sensorDev.current_state.doorcontact_state === undefined){
+      badge.className = 'sensor-badge';
+      textEl.textContent = 'ບໍ່ພົບຂໍ້ມູນ sensor';
+      return;
+    }
+    const sensorOpen = !!sensorDev.current_state.doorcontact_state;
+    const miniWrap = modal.querySelector('#sensorMiniWrap');
+    if (miniWrap) animateSensorGap(miniWrap, sensorOpen);
+    // ຄາດວ່າ % = 0 ຄວນກົງກັບ sensor "ปิด", ແລະ % > 0 ຄວນກົງກັບ sensor "ເປີດ" — ຖ້າບໍ່ກົງກັນ
+    // (ເຊັ່ນ % ບອກວ່າເປີດ 20% ແຕ່ sensor ຍັງບອກວ່າປິດຢູ່) = ໜ້າສົງໄສ ອາດແມ່ນປະຕູຕິດ/ບໍ່ຂະຫຍັບຕາມ %
+    const pctNow = computeLiveGatePosition(liveState, liveConfig, Date.now()).position;
+    const expectOpen = pctNow > 0;
+    const matches = sensorOpen === expectOpen;
+    badge.className = 'sensor-badge ' + (matches ? 'match' : 'mismatch');
+    textEl.textContent = 'Sensor ຈິງ: ' + (sensorOpen ? 'ເປີດ' : 'ປິດ') + (matches ? '' : ' ⚠️ ບໍ່ກົງກັບ %');
+  }
+  renderSensorBadge();
+  activeGateSensorRefresh = renderSensorBadge;
+
+  function renderLive(){
+    let live = computeLiveGatePosition(liveState, liveConfig, Date.now());
+    if (predictedTargetPct !== null && live.isMoving){
+      const reached = live.direction === 'opening' ? live.position >= predictedTargetPct : live.position <= predictedTargetPct;
+      if (reached){
+        live = { position: predictedTargetPct, direction: live.direction, isMoving:false };
+        liveState = Object.assign({}, liveState, { position_pct: predictedTargetPct, is_moving:false });
+        predictedTargetPct = null;
+        stopTick();
+      }
+    }
+    const pct = Math.round(live.position);
+    const svgWrap = modal.querySelector('.gate-svg-wrap');
+    if (svgWrap) svgWrap.innerHTML = gateSvgFor(gc, pct);
+    const pctEl = modal.querySelector('#gatePctLabel'); if (pctEl) pctEl.textContent = pct+'%';
+    const statusEl = modal.querySelector('#gateStatusLabel');
+    if (statusEl){
+      statusEl.className = 'gate-status-label' + (live.isMoving?' moving':'');
+      statusEl.innerHTML = (live.isMoving?'<span class="pulse-dot"></span>':'') + gateStatusText(live);
+    }
+    renderSensorBadge();
+    return live;
+  }
+  function stopTick(){ if (tickTimer){ clearInterval(tickTimer); tickTimer=null; } }
+  function startTickIfMoving(){
+    stopTick();
+    if (!computeLiveGatePosition(liveState, liveConfig, Date.now()).isMoving) return;
+    const startedAt = Date.now();
+    const maxTravel = Math.max(liveConfig.open_travel_seconds||26, liveConfig.close_travel_seconds||26);
+    let tickCount = 0;
+    tickTimer = setInterval(async () => {
+      try{
+        if (Date.now()-startedAt > maxTravel*2000){ stopTick(); return; } // safety net
+        tickCount++;
+        // ທຸກ ~3 ວິນາທີ ດຶງຄ່າຈິງຄືນຈາກ Supabase ນຳ (ບໍ່ໄດ້ອີງໃສ່ realtime ຢ່າງດຽວ — ຖ້າ
+        // channel ຫຼຸດ/ບໍ່ມາ ຈະບໍ່ຄ້າງນິ້ງຕະຫຼອດ, ຮັນສະເພາະຕອນ modal ນີ້ເປີດຄ້າງຢູ່ ແລະ ກຳລັງເຄື່ອນທີ່)
+        if (tickCount % 6 === 0){
+          const { data } = await sb.from('gate_position_state').select('*').eq('device_id', dev.tuya_device_id).maybeSingle();
+          if (data) liveState = data;
+        }
+        const live = renderLive();
+        if (!live.isMoving) stopTick();
+      }catch(e){ /* ບໍ່ໃຫ້ error ຢຸດ interval ຄ້າງ */ }
+    }, 500);
+  }
+
+  // ຮັບ realtime ສະເພາະຕອນເປີດໜ້ານີ້ຄ້າງໄວ້ (ບໍ່ເປີດຄ້າງທົ່ວແອັບ) — ຖ້າອຸປະກອນອື່ນ (Marketing
+  // Studio ຫຼືແອັບໃໝ່ອີກເຄື່ອງ) ສັ່ງປະຕູໂຕນີ້ຂະນະໜ້າຈໍນີ້ຍັງເປີດຢູ່ ຈະອັບເດດເອງທັນທີ ບໍ່ຕ້ອງກົດ ↻
+  const gateChannel = sb.channel('gate_position_state_' + dev.tuya_device_id)
+    .on('postgres_changes', { event:'*', schema:'public', table:'gate_position_state', filter:`device_id=eq.${dev.tuya_device_id}` }, (payload) => {
+      try{
+        if (!payload.new) return;
+        liveState = payload.new;
+        predictedTargetPct = null; // ຄ່າຈິງມາແລ້ວ ບໍ່ຕ້ອງອີງໃສ່ການຄາດຄະເນອີກຕໍ່ໄປ
+        renderLive();
+        startTickIfMoving();
+        renderDeviceGrid();
+      }catch(e){ /* non-fatal */ }
+    })
+    .subscribe();
+
+  function stopAll(){
+    stopTick();
+    sb.removeChannel(gateChannel);
+  }
+  activeGateStopTick = stopAll;
+
+  async function reloadGateState(){
+    const [stateRes, configRes] = await Promise.all([
+      sb.from('gate_position_state').select('*').eq('device_id', dev.tuya_device_id).maybeSingle(),
+      sb.from('gate_position_config').select('*').eq('device_id', dev.tuya_device_id).maybeSingle(),
+    ]);
+    if (stateRes.data) liveState = stateRes.data;
+    if (configRes.data) liveConfig = configRes.data;
+    predictedTargetPct = null; // ຄ່າຈິງມາແລ້ວ ບໍ່ຕ້ອງອີງໃສ່ການຄາດຄະເນອີກຕໍ່ໄປ
+    renderLive();
+    startTickIfMoving();
+  }
+
+  // ຄາດຄະເນ ແລະ ເລີ່ມ animate ທັນທີຕອນກົດ (ບໍ່ລໍ server ~2 ວິນາທີ) — ຄ່ອຍແກ້ໃຫ້ຖືກຕ້ອງ
+  // ພາຍຫຼັງເມື່ອ server ຕອບກັບ (reloadGateState). ຄາດຄະເນຜິດໜ້ອຍໜຶ່ງ ດີກວ່າຄ້າງນິ້ງແລ້ວໂດດ.
+  function predictAndAnimate(forcedDirection, forcedStop, targetPct){
+    const live = computeLiveGatePosition(liveState, liveConfig, Date.now());
+    const isStop = forcedStop || (!forcedDirection && live.isMoving);
+    if (isStop){
+      // ຢຸດ = ຄາດວ່າຢຸດທັນທີ ບໍ່ຕ້ອງລໍ delay
+      predictedTargetPct = null;
+      liveState = Object.assign({}, liveState, { position_pct: live.position, direction: live.direction, is_moving:false, command_started_at: new Date().toISOString() });
+    } else {
+      // ໄປ = ມອເຕີແທ້ຍັງບໍ່ທັນເລີ່ມທັນທີ (server ຕ້ອງກົດ+ປ່ອຍ relay ກ່ອນ ~1.6-2ວິ) — ຕັ້ງ
+      // command_started_at ໄປໃນອະນາຄົດ (delay ດຽວກັນກັບ config) ໃຫ້ animate "ຄ້າງໄວ້" ຊ່ວງນັ້ນ
+      // ກ່ອນ (computeLiveGatePosition clamp elapsed ທີ່ຕິດລົບໄວ້ທີ່ 0 ຢູ່ແລ້ວ) ຄືມອເຕີແທ້
+      // targetPct: ຖ້າມີ (ກົດ "ໄປ %"/"ເປີດ X%") ໃຫ້ renderLive() ຮູ້ຈັກຢຸດ animate ທີ່ຈຸດນັ້ນເອງ —
+      // ບໍ່ແມ່ນແລ່ນຕໍ່ບໍ່ຢຸດຈົນເກີນເປົ້າໝາຍແລ້ວໂດດຖອຍຄືນຕອນຄ່າຈິງມາ
+      predictedTargetPct = (typeof targetPct === 'number') ? targetPct : null;
+      const delayMs = liveConfig.physical_press_delay_ms || 1800;
+      const direction = forcedDirection || (live.direction === 'opening' ? 'closing' : 'opening');
+      liveState = Object.assign({}, liveState, { position_pct: live.position, direction, is_moving:true, command_started_at: new Date(Date.now()+delayMs).toISOString() });
+    }
+    renderLive();
+    startTickIfMoving();
+  }
+
+  async function runAction(fn, busyLabel){
+    try{
+      const data = await fn();
+      if (!data.ok) toast(data.message || data.error || 'ສັ່ງລົ້ມເຫຼວ', true);
+      else if (busyLabel) toast(busyLabel);
+    }catch(e){
+      toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+    }
+    await reloadGateState(); // ແກ້ຄືນໃຫ້ຖືກຕ້ອງ 100% ຕາມຄ່າຈິງຈາກ server
+    renderDeviceGrid();
+  }
+
+  if (gc.type === 'single'){
+    const toggleBtn = modal.querySelector('#gateToggleBtn');
+    if (toggleBtn) toggleBtn.addEventListener('click', async () => {
+      predictAndAnimate();
+      toggleBtn.disabled = true;
+      logActivity('ກົດເປີດ/ປິດ ' + dev.name);
+      await runAction(() => callGateControl(dev.tuya_device_id), '✅ ສົ່ງຄຳສັ່ງສຳເລັດ');
+      toggleBtn.disabled = false;
+    });
+    const quickBtn = modal.querySelector('#gateQuickBtn');
+    if (quickBtn) quickBtn.addEventListener('click', async () => {
+      const targetPct = Number(liveConfig.quick_open_pct);
+      predictAndAnimate(targetPct > computeLiveGatePosition(liveState, liveConfig, Date.now()).position ? 'opening' : 'closing', false, targetPct);
+      quickBtn.disabled = true;
+      logActivity('ກົດເປີດ ' + dev.name + ' ' + targetPct + '%');
+      await runAction(async () => {
+        const d = await callGateOpenToPercent(dev.tuya_device_id, targetPct);
+        if (d.ok) toast(d.alreadyThere ? '✅ ຢູ່ໃກ້ຄ່ານັ້ນແລ້ວ' : `✅ ຢຸດທີ່ ~${Math.round(d.position)}%`);
+        return d;
+      });
+      quickBtn.disabled = false;
+    });
+    const editQuickPctBtn = modal.querySelector('#editQuickPctBtn');
+    if (editQuickPctBtn) editQuickPctBtn.addEventListener('click', async () => {
+      const current = liveConfig.quick_open_pct || 20;
+      const next = window.prompt('ຕັ້ງຄ່າ % ດ່ວນໃໝ່ (0-100):', String(current));
+      if (next === null) return;
+      const val = Math.max(0, Math.min(100, Number(next)));
+      if (!Number.isFinite(val)){ toast('ໃສ່ຕົວເລກໃຫ້ຖືກຕ້ອງ', true); return; }
+      const { error } = await sb.from('gate_position_config').update({ quick_open_pct: val }).eq('device_id', dev.tuya_device_id);
+      if (error){ toast('ບັນທຶກລົ້ມເຫຼວ', true); return; }
+      liveConfig.quick_open_pct = val;
+      toast('ຕັ້ງຄ່າ % ດ່ວນເປັນ ' + val + '% ແລ້ວ');
+      logActivity('ປ່ຽນຄ່າ % ດ່ວນ ' + dev.name, val + '%');
+      modal.innerHTML = gateDetailHtml(dev, liveConfig, liveState);
+      wireGateDetail(dev, liveConfig, liveState);
+    });
+  } else {
+    modal.querySelector('#gateOpenBtn').addEventListener('click', () => { predictAndAnimate('opening'); logActivity('ກົດເປີດ ' + dev.name); return runAction(() => callGateDirectControl(dev.tuya_device_id, 'open')); });
+    modal.querySelector('#gateCloseBtn').addEventListener('click', () => { predictAndAnimate('closing'); logActivity('ກົດປິດ ' + dev.name); return runAction(() => callGateDirectControl(dev.tuya_device_id, 'close')); });
+    modal.querySelector('#gateStopBtn').addEventListener('click', () => { predictAndAnimate(null, true); logActivity('ກົດຢຸດ ' + dev.name); return runAction(() => callGateDirectControl(dev.tuya_device_id, 'stop'), 'ຢຸດແລ້ວ'); });
+  }
+
+  renderLive();
+  startTickIfMoving();
+}
+
+function acDetailHtml(dev){
+  const s = dev.current_state || {};
+  const temp = typeof s.temp === 'number' ? s.temp : 24;
+  return `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'ບໍ່ໄດ້ຈັດຫ້ອງ')}</div>
+      </div>
+    </div>
+    <div class="ac-panel">
+      <div class="ac-temp-display" id="acTempDisplay">${temp}°</div>
+      <div class="ac-temp-controls">
+        <button class="ac-stepper" id="acTempDown">−</button>
+        <button class="power-toggle" id="acPowerBtn" style="width:52px;height:52px;font-size:20px;">⏻</button>
+        <button class="ac-stepper" id="acTempUp">+</button>
+      </div>
+      <div class="ac-row">
+        <button class="btn ${s.fan===0?'selected':''}" data-fan="0">ອ່ອນ</button>
+        <button class="btn ${s.fan===1?'selected':''}" data-fan="1">ກາງ</button>
+        <button class="btn ${s.fan===2?'selected':''}" data-fan="2">ແຮງ</button>
+        <button class="btn ${s.fan===3?'selected':''}" data-fan="3">ແຮງສຸດ</button>
+      </div>
+      <div class="hint">ຄວບຄຸມຜ່ານ Smart IR — ອາດຊ້າ 1-2 ວິນາທີ</div>
+    </div>
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+}
+function wireAcDetail(dev){
+  const modal = document.getElementById('deviceModal');
+  modal.querySelector('#closeDetailBtn').addEventListener('click', closeDeviceDetail);
+  let temp = (dev.current_state && typeof dev.current_state.temp === 'number') ? dev.current_state.temp : 24;
+  let isOn = !!(dev.current_state && dev.current_state.power == 1);
+  const powerBtn = modal.querySelector('#acPowerBtn');
+  powerBtn.classList.toggle('on', isOn);
+
+  async function sendAc(cmds){
+    try{
+      await callAcCommand(dev.tuya_device_id, cmds);
+      toast('ສົ່ງຄຳສັ່ງແລ້ວ');
+      logActivity('ຕັ້ງຄ່າແອ ' + dev.name, cmds.map(c => c.code+'='+c.value).join(', '));
+    }catch(e){
+      toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+    }
+  }
+
+  powerBtn.addEventListener('click', async () => {
+    isOn = !isOn;
+    powerBtn.classList.toggle('on', isOn);
+    dev.current_state = Object.assign({}, dev.current_state, { power: isOn?1:0 });
+    await sendAc([{ code:'power', value: isOn?1:0 }]);
+    renderDeviceGrid();
+  });
+  modal.querySelector('#acTempUp').addEventListener('click', async () => {
+    temp = Math.min(30, temp+1);
+    modal.querySelector('#acTempDisplay').textContent = temp+'°';
+    dev.current_state = Object.assign({}, dev.current_state, { temp, power:1 });
+    await sendAc([{ code:'temp', value: temp }]);
+  });
+  modal.querySelector('#acTempDown').addEventListener('click', async () => {
+    temp = Math.max(16, temp-1);
+    modal.querySelector('#acTempDisplay').textContent = temp+'°';
+    dev.current_state = Object.assign({}, dev.current_state, { temp, power:1 });
+    await sendAc([{ code:'temp', value: temp }]);
+  });
+  modal.querySelectorAll('[data-fan]').forEach(b => {
+    b.addEventListener('click', async () => {
+      modal.querySelectorAll('[data-fan]').forEach(x=>x.classList.remove('selected'));
+      b.classList.add('selected');
+      await sendAc([{ code:'fan', value: Number(b.dataset.fan) }]);
+    });
+  });
+}
+
+function readonlyDetailHtml(dev){
+  const s = dev.current_state || {};
+  const rows = Object.entries(s).filter(([k]) => !k.startsWith('_')).map(([k,v]) => `
+    <div class="switch-row"><span class="code">${k}</span><span>${escapeHtml(String(v))}</span></div>
+  `).join('') || '<div class="hint">ຍັງບໍ່ມີຂໍ້ມູນ</div>';
+  return `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'ບໍ່ໄດ້ຈັດຫ້ອງ')} — ອ່ານຄ່າຢ່າງດຽວ</div>
+      </div>
+    </div>
+    <div class="switch-list">${rows}</div>
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+}
+
+// ---------- Smart Meter (dlq) — ຄືການສະແດງໃນ Smart Life ----------
+function meterDetailHtml(dev){
+  const s = dev.current_state || {};
+  const hasSwitch = 'switch' in s;
+  const stats = [];
+  if ('add_ele' in s) stats.push({ label:'Total Ele(kWh)', val:(Number(s.add_ele)/100).toFixed(2) });
+  if ('cur_power' in s) stats.push({ label:'Power(W)', val:(Number(s.cur_power)/10).toFixed(1) });
+  if ('cur_voltage' in s) stats.push({ label:'Voltage(V)', val:(Number(s.cur_voltage)/10).toFixed(1) });
+  if ('cur_current' in s) stats.push({ label:'Current(A)', val:(Number(s.cur_current)/1000).toFixed(2) });
+  return `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'ບໍ່ໄດ້ຈັດຫ້ອງ')}</div>
+      </div>
+    </div>
+    ${stats.length ? `
+      <div class="meter-grid">
+        ${stats.map(st => `<div class="meter-stat"><div class="meter-num">${st.val}</div><div class="meter-label">${st.label}</div></div>`).join('')}
+      </div>
+      <div class="hint">ຄິດໄລ່ຈາກຄ່າມາດຕະຖານ Tuya — ຖ້າຕົວເລກຜິດປົກກະຕິ ບອກໄດ້ຈະປັບໃຫ້</div>
+    ` : '<div class="hint">ຍັງບໍ່ມີຂໍ້ມູນມິເຕີ — ລອງເປີດອຸປະກອນ ຫຼືລໍ event ອັດຕະໂນມັດ</div>'}
+    ${hasSwitch ? `
+      <hr class="divider">
+      <div class="big-toggle-wrap">
+        <button class="big-toggle ${s.switch?'on':''}" id="meterToggleBtn">${s.switch?'ON':'OFF'}</button>
+        <div class="big-toggle-label">switch</div>
+      </div>
+    ` : ''}
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+}
+function wireMeterDetail(dev){
+  const modal = document.getElementById('deviceModal');
+  const closeBtn = modal.querySelector('#closeDetailBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
+  const btn = modal.querySelector('#meterToggleBtn');
+  if (btn) btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try{
+      const requestedVal = !btn.classList.contains('on');
+      const result = await callDeviceCommand(dev.tuya_device_id, [{ code:'switch', value: requestedVal }]);
+      const confirmedVal = statusValue(result.deviceStatus, 'switch', requestedVal);
+      btn.classList.toggle('on', !!confirmedVal);
+      btn.textContent = confirmedVal ? 'ON' : 'OFF';
+      dev.current_state = Object.assign({}, dev.current_state, { switch: confirmedVal });
+      renderDeviceGrid();
+      toast(confirmedVal ? 'ເປີດແລ້ວ' : 'ປິດແລ້ວ');
+    }catch(e){
+      toast('ສັ່ງລົ້ມເຫຼວ: ' + (e.message||e), true);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+}
+
+// ---------- ເຊັນເຊີປະຕູ (mcs) — ຄືການສະແດງໃນ Smart Life ----------
+function sensorSvg(isOpen){
+  const mainX = 66, mainY = 30, mainW = 50, mainH = 140;
+  const compW = 22, compH = 86, compY = mainY + (mainH-compH)/2;
+  const gap = isOpen ? 44 : 3;
+  const compX = mainX + mainW + gap;
+  return `
+    <svg viewBox="0 0 220 200" width="100%">
+      <rect id="sensorMain" x="${mainX}" y="${mainY}" width="${mainW}" height="${mainH}" rx="10" fill="#d8d2c4" stroke="#00000020"/>
+      <rect id="sensorComp" x="${compX}" y="${compY}" width="${compW}" height="${compH}" rx="8" fill="#d8d2c4" stroke="#00000020"/>
+    </svg>`;
+}
+function animateSensorGap(svgWrap, isOpen){
+  const mainX = 66, mainW = 50;
+  const gap = isOpen ? 44 : 3;
+  const compX = mainX + mainW + gap;
+  const comp = svgWrap.querySelector('#sensorComp');
+  if (comp){
+    comp.style.transition = 'x 0.6s cubic-bezier(.4,0,.2,1)';
+    comp.setAttribute('x', compX);
+  }
+}
+function sensorDetailHtml(dev){
+  const s = dev.current_state || {};
+  const isOpen = !!s.doorcontact_state;
+  const battery = s.battery_state || s.battery_percentage;
+  const batteryText = battery === 'high' ? 'ສູງ' : battery === 'middle' ? 'ກາງ' : battery === 'low' ? 'ຕ່ຳ — ຄວນປ່ຽນແບັດ' : (battery!==undefined ? battery+'%' : 'ບໍ່ຮູ້');
+  return `
+    <div class="detail-head">
+      <div class="device-ic">${categoryIcon(dev.category)}</div>
+      <div>
+        <h2 style="margin:0;">${escapeHtml(dev.name)}</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(dev.room||'ບໍ່ໄດ້ຈັດຫ້ອງ')}</div>
+      </div>
+    </div>
+    <div class="sensor-visual">
+      <div class="sensor-svg-wrap">${sensorSvg(isOpen)}</div>
+      <div class="sensor-status-pill ${isOpen?'open':'closed'}" id="sensorStatusPill">
+        <span>${isOpen?'🔔':'🔕'}</span> ${isOpen?'ເປີດ':'ປິດ'}
+      </div>
+      <div class="sensor-info-row" id="sensorInfoRow">
+        <span>🔋 ແບັດ: ${batteryText}</span>
+        <span>${dev.is_online?'🟢 ອອນລາຍ':'⚪ ອອບລາຍ'}</span>
+      </div>
+    </div>
+    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+  `;
+}
+
+// wire close button for readonly (added after innerHTML set in openDeviceDetail via generic delegate)
+document.getElementById('deviceModal').addEventListener('click', (e) => {
+  if (e.target.id === 'closeDetailBtn') closeDeviceDetail();
+});
+
+// =====================================================================
+// PAGE: RULES — automation builder (existing functionality)
+// =====================================================================
+function describeTrigger(rule){
+  if (rule.trigger_type === 'schedule'){
+    const c = rule.trigger_config || {};
+    return `🕒 ທຸກ${c.repeat==='once'?'ຄັ້ງດຽວ':'ມື້'} ໂມງ ${c.time||'?'}`;
+  }
+  const c = rule.trigger_config || {};
+  const dev = deviceByTuyaId(c.device_tuya_id);
+  return `📟 ${dev ? dev.name : c.device_tuya_id} — ${c.code} ${c.op} ${c.value}`;
+}
+function describeAction(a){
+  const dev = deviceById(a.target_device_id);
+  const name = dev ? dev.name : '(ອຸປະກອນຖືກລຶບ)';
+  const cmd = a.command || {};
+  if (cmd.type === 'ac'){
+    const parts = (cmd.commands||[]).map(c => `${c.code}=${c.value}`).join(', ');
+    return `${name}: ${parts}`;
+  }
+  if (cmd.type === 'switch'){
+    const parts = (cmd.codes||[]).map(c => `${c.code} → ${c.value?'ເປີດ':'ປິດ'}`).join(', ');
+    return `${name}: ${parts}`;
+  }
+  const parts = (cmd.codes||[]).map(c => `${c.code}=${c.value}`).join(', ');
+  return `${name}: ${parts}`;
+}
+function renderRules(){
+  const box = document.getElementById('rulesContainer');
+  if (STATE.rules.length === 0){
+    box.innerHTML = `<div class="empty"><b>ຍັງບໍ່ມີກົດ</b>ກົດ "+ ສ້າງກົດໃໝ່" ເພື່ອເລີ່ມຕັ້ງອັດຕະໂນມັດ</div>`;
+    return;
+  }
+  box.innerHTML = STATE.rules.map(rule => {
+    const actions = STATE.actions.filter(a => a.rule_id === rule.id);
+    const tagClass = rule.trigger_type === 'schedule' ? 'schedule' : 'device';
+    return `
+    <div class="rule-card ${rule.enabled ? '' : 'disabled'}" data-id="${rule.id}">
+      <div class="rule-head">
+        <div>
+          <div class="rule-name">${escapeHtml(rule.name)}</div>
+          <div class="rule-meta"><span class="tag ${tagClass}">${describeTrigger(rule)}</span></div>
+        </div>
+        <div class="rule-controls">
+          <label class="switch">
+            <input type="checkbox" class="enable-toggle" ${rule.enabled?'checked':''}>
+            <span class="slider"></span>
+          </label>
+          <button class="btn btn-ghost edit-rule" title="ແກ້ໄຂ">✏️</button>
+          <button class="btn btn-ghost btn-danger delete-rule" title="ລຶບ">🗑</button>
+        </div>
+      </div>
+      <div class="rule-actions-list">
+        ${actions.map(a => `<div class="rule-action-row"><span class="arrow">→</span>${escapeHtml(describeAction(a))}</div>`).join('') || '<div class="rule-action-row">(ບໍ່ມີ action)</div>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('.enable-toggle').forEach(el => {
+    el.addEventListener('change', async (ev) => {
+      const card = ev.target.closest('.rule-card');
+      const id = card.dataset.id;
+      const rule = STATE.rules.find(r=>r.id===id);
+      const { error } = await sb.from('automation_rules').update({ enabled: ev.target.checked }).eq('id', id);
+      if (error){ toast('ອັບເດດລົ້ມເຫຼວ', true); ev.target.checked = !ev.target.checked; return; }
+      card.classList.toggle('disabled', !ev.target.checked);
+      toast(ev.target.checked ? 'ເປີດໃຊ້ກົດແລ້ວ' : 'ປິດກົດແລ້ວ');
+      logActivity((ev.target.checked?'ເປີດໃຊ້ກົດ':'ປິດກົດ') + ' ' + (rule?rule.name:id));
+    });
+  });
+  box.querySelectorAll('.edit-rule').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      const card = ev.target.closest('.rule-card');
+      const id = card.dataset.id;
+      const rule = STATE.rules.find(r=>r.id===id);
+      if (rule) openEditModal(rule);
+    });
+  });
+  box.querySelectorAll('.delete-rule').forEach(el => {
+    el.addEventListener('click', async (ev) => {
+      const card = ev.target.closest('.rule-card');
+      const id = card.dataset.id;
+      const rule = STATE.rules.find(r=>r.id===id);
+      if (!confirmModal(`ລຶບກົດ "${rule.name}" ບໍ່?`)) return;
+      const { error: e1 } = await sb.from('automation_actions').delete().eq('rule_id', id);
+      const { error: e2 } = await sb.from('automation_rules').delete().eq('id', id);
+      if (e1 || e2){ toast('ລຶບລົ້ມເຫຼວ', true); return; }
+      toast('ລຶບກົດແລ້ວ');
+      logActivity('ລຶບກົດ ' + (rule?rule.name:id));
+      loadAll();
+    });
+  });
+}
+
+document.getElementById('triggerDeviceBtn').addEventListener('click', () => setTriggerType('device'));
+document.getElementById('triggerScheduleBtn').addEventListener('click', () => setTriggerType('schedule'));
+let currentTriggerType = 'device';
+function setTriggerType(t){
+  currentTriggerType = t;
+  document.getElementById('triggerDeviceBtn').classList.toggle('active', t==='device');
+  document.getElementById('triggerScheduleBtn').classList.toggle('active', t==='schedule');
+  document.getElementById('triggerDeviceBlock').style.display = t==='device' ? '' : 'none';
+  document.getElementById('triggerScheduleBlock').style.display = t==='schedule' ? '' : 'none';
+}
+function populateTriggerDeviceSelect(){
+  const sel = document.getElementById('triggerDevice');
+  sel.innerHTML = STATE.devices.map(d => `<option value="${d.tuya_device_id}">${escapeHtml(d.name)}</option>`).join('');
+  sel.onchange = () => populateTriggerCodeSelect();
+  populateTriggerCodeSelect();
+}
+function availableCodesFor(device){
+  const state = device.current_state || {};
+  const codes = Object.keys(state).filter(k => !k.startsWith('_') && !/^\d+$/.test(k));
+  return codes.length ? codes : ['(ຍັງບໍ່ມີຂໍ້ມູນ dp — ລອງ trigger ອຸປະກອນນີ້ຈິງ 1 ຄັ້ງກ່ອນ)'];
+}
+function populateTriggerCodeSelect(){
+  const tid = document.getElementById('triggerDevice').value;
+  const dev = deviceByTuyaId(tid);
+  const sel = document.getElementById('triggerCode');
+  if (!dev){ sel.innerHTML=''; return; }
+  sel.innerHTML = availableCodesFor(dev).map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function addActionBlock(prefill){
+  const defaultDevice = STATE.devices[0];
+  const entry = prefill || { targetTuyaId: defaultDevice ? defaultDevice.tuya_device_id : '', };
+  STATE.editingActions.push(entry);
+  renderActionsContainer();
+}
+document.getElementById('addActionBtn').addEventListener('click', () => addActionBlock());
+
+function renderActionsContainer(){
+  const box = document.getElementById('actionsContainer');
+  box.innerHTML = STATE.editingActions.map((entry, i) => actionBlockHtml(entry, i)).join('');
+  STATE.editingActions.forEach((entry, i) => {
+    const devSel = box.querySelector(`.action-device[data-idx="${i}"]`);
+    if (devSel){
+      devSel.value = entry.targetTuyaId;
+      devSel.addEventListener('change', () => { entry.targetTuyaId = devSel.value; renderActionsContainer(); });
+    }
+    const removeBtn = box.querySelector(`.action-remove[data-idx="${i}"]`);
+    if (removeBtn) removeBtn.addEventListener('click', () => { STATE.editingActions.splice(i,1); renderActionsContainer(); });
+    wireActionControls(box, entry, i);
+  });
+}
+function actionBlockHtml(entry, i){
+  const dev = deviceByTuyaId(entry.targetTuyaId);
+  const deviceOptions = STATE.devices.map(d => `<option value="${d.tuya_device_id}" ${d.tuya_device_id===entry.targetTuyaId?'selected':''}>${escapeHtml(d.name)}</option>`).join('');
+  let controlsHtml = '';
+  if (dev){
+    if (dev.category === 'infrared_ac'){
+      controlsHtml = acControlsHtml(i, entry);
+    } else {
+      const switches = switchCodesFor(dev);
+      if (switches.length){
+        controlsHtml = switchControlsHtml(i, entry, switches, dev);
+      } else {
+        controlsHtml = genericControlsHtml(i, entry, dev);
+      }
+    }
+  }
+  return `
+  <div class="action-block">
+    <div class="action-block-head">
+      <span>Action ${i+1}</span>
+      <button type="button" class="btn btn-ghost btn-danger action-remove" data-idx="${i}">ລຶບ</button>
+    </div>
+    <div class="field" style="margin-bottom:10px;">
+      <label>ອຸປະກອນເປົ້າໝາຍ</label>
+      <select class="action-device" data-idx="${i}">${deviceOptions}</select>
+    </div>
+    ${controlsHtml}
+  </div>`;
+}
+function switchCodesFor(dev){
+  const state = dev.current_state || {};
+  return Object.keys(state).filter(k => /^switch(_\d+)?$/.test(k));
+}
+function switchLabel(dev, code, fallback){
+  return (dev.switch_labels && dev.switch_labels[code]) || fallback;
+}
+function switchControlsHtml(i, entry, switches, dev){
+  if (!entry.switchValues) entry.switchValues = {};
+  return `
+  <div class="field">
+    <label>ຕິກເລືອກສະວິດທີ່ຢາກໃຊ້ (ເລືອກໄດ້ຫຼາຍໂຕ)</label>
+    <div class="switch-grid">
+      ${switches.map(code => `
+        <label class="switch-chip">
+          <input type="checkbox" class="sw-pick" data-idx="${i}" data-code="${code}" ${code in entry.switchValues ? 'checked':''}>
+          ${escapeHtml(dev ? switchLabel(dev, code, code) : code)}
+        </label>
+      `).join('')}
+    </div>
+    <div id="swValueRows-${i}" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+  </div>`;
+}
+function acControlsHtml(i, entry){
+  if (!entry.ac) entry.ac = { power:'1', temp:24, fan:'', mode:'' };
+  return `
+  <div class="row2">
+    <div class="field">
+      <label>ພະລັງງານ</label>
+      <select class="ac-power" data-idx="${i}">
+        <option value="1" ${entry.ac.power==='1'?'selected':''}>ເປີດ</option>
+        <option value="0" ${entry.ac.power==='0'?'selected':''}>ປິດ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ອຸນຫະພູມ (°C)</label>
+      <input type="number" class="ac-temp" data-idx="${i}" min="16" max="30" value="${entry.ac.temp}">
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field">
+      <label>ຄວາມແຮງພັດລົມ</label>
+      <select class="ac-fan" data-idx="${i}">
+        <option value="">(ບໍ່ປ່ຽນ)</option>
+        <option value="0" ${entry.ac.fan==='0'?'selected':''}>ອ່ອນ</option>
+        <option value="1" ${entry.ac.fan==='1'?'selected':''}>ກາງ</option>
+        <option value="2" ${entry.ac.fan==='2'?'selected':''}>ແຮງ</option>
+        <option value="3" ${entry.ac.fan==='3'?'selected':''}>ແຮງສຸດ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ໂໝດ</label>
+      <select class="ac-mode" data-idx="${i}">
+        <option value="">(ບໍ່ປ່ຽນ)</option>
+        <option value="0" ${entry.ac.mode==='0'?'selected':''}>ເຢັນ (Cool)</option>
+        <option value="1" ${entry.ac.mode==='1'?'selected':''}>ແຫ້ງ (Dry)</option>
+        <option value="2" ${entry.ac.mode==='2'?'selected':''}>ພັດລົມ (Fan)</option>
+      </select>
+    </div>
+  </div>
+  <div class="hint">ຄວບຄຸມຜ່ານ Smart IR — ຕ້ອງໃຫ້ໂຕຮັບ IR ຢູ່ໃນລະດັບສາຍຕາກົງກັບແອ</div>`;
+}
+function genericControlsHtml(i, entry, dev){
+  if (!entry.generic) entry.generic = { code:'', value:'' };
+  return `
+  <div class="row2">
+    <div class="field">
+      <label>dp code</label>
+      <input type="text" class="gen-code" data-idx="${i}" placeholder="ເຊັ່ນ switch_1" value="${escapeHtml(entry.generic.code)}">
+    </div>
+    <div class="field">
+      <label>ຄ່າ</label>
+      <input type="text" class="gen-value" data-idx="${i}" placeholder="true / 25 / ..." value="${escapeHtml(entry.generic.value)}">
+    </div>
+  </div>
+  <div class="hint">ອຸປະກອນນີ້ຍັງບໍ່ມີຂໍ້ມູນ dp ທີ່ຮູ້ຈັກ — ໃສ່ code/ຄ່າດ້ວຍມືກ່ອນ (ຫຼັງອຸປະກອນສົ່ງ event ຄັ້ງທຳອິດ ລະບົບຈະຮູ້ຈັກເອງ)</div>`;
+}
+function wireActionControls(box, entry, i){
+  box.querySelectorAll(`.sw-pick[data-idx="${i}"]`).forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) entry.switchValues[cb.dataset.code] = true;
+      else delete entry.switchValues[cb.dataset.code];
+      renderSwitchValueRows(box, entry, i);
+    });
+  });
+  renderSwitchValueRows(box, entry, i);
+  const acPower = box.querySelector(`.ac-power[data-idx="${i}"]`);
+  if (acPower) acPower.addEventListener('change', () => entry.ac.power = acPower.value);
+  const acTemp = box.querySelector(`.ac-temp[data-idx="${i}"]`);
+  if (acTemp) acTemp.addEventListener('input', () => entry.ac.temp = acTemp.value);
+  const acFan = box.querySelector(`.ac-fan[data-idx="${i}"]`);
+  if (acFan) acFan.addEventListener('change', () => entry.ac.fan = acFan.value);
+  const acMode = box.querySelector(`.ac-mode[data-idx="${i}"]`);
+  if (acMode) acMode.addEventListener('change', () => entry.ac.mode = acMode.value);
+  const genCode = box.querySelector(`.gen-code[data-idx="${i}"]`);
+  if (genCode) genCode.addEventListener('input', () => entry.generic.code = genCode.value);
+  const genValue = box.querySelector(`.gen-value[data-idx="${i}"]`);
+  if (genValue) genValue.addEventListener('input', () => entry.generic.value = genValue.value);
+}
+function renderSwitchValueRows(box, entry, i){
+  const holder = box.querySelector(`#swValueRows-${i}`);
+  if (!holder) return;
+  const codes = Object.keys(entry.switchValues||{});
+  holder.innerHTML = codes.map(code => `
+    <div style="display:flex; align-items:center; gap:10px; font-size:13.5px;">
+      <span style="min-width:90px; color:var(--text-dim);">${code}</span>
+      <select class="sw-val" data-idx="${i}" data-code="${code}">
+        <option value="true" ${entry.switchValues[code]===true?'selected':''}>ເປີດ</option>
+        <option value="false" ${entry.switchValues[code]===false?'selected':''}>ປິດ</option>
+      </select>
+    </div>
+  `).join('');
+  holder.querySelectorAll('.sw-val').forEach(sel => {
+    sel.addEventListener('change', () => { entry.switchValues[sel.dataset.code] = sel.value === 'true'; });
+  });
+}
+
+let editingRuleId = null; // null = ສ້າງກົດໃໝ່, ບໍ່ null = ກຳລັງແກ້ໄຂກົດອັນນີ້ຢູ່
+function openModal(){
+  editingRuleId = null;
+  document.getElementById('modalTitle').textContent = 'ສ້າງກົດໃໝ່';
+  document.getElementById('ruleName').value = '';
+  document.getElementById('triggerValue').value = '';
+  setTriggerType('device');
+  populateTriggerDeviceSelect();
+  STATE.editingActions = [];
+  if (STATE.devices.length) addActionBlock();
+  else renderActionsContainer();
+  document.getElementById('overlay').classList.add('show');
+}
+function commandToEntry(action){
+  const dev = STATE.devices.find(d => d.id === action.target_device_id);
+  const entry = { targetTuyaId: dev ? dev.tuya_device_id : '' };
+  const cmd = action.command || {};
+  if (cmd.type === 'ac'){
+    entry.ac = { power:'', temp:'', fan:'', mode:'' };
+    (cmd.commands||[]).forEach(c => {
+      if (c.code === 'power') entry.ac.power = String(c.value);
+      else if (c.code === 'temp') entry.ac.temp = c.value;
+      else if (c.code === 'fan') entry.ac.fan = String(c.value);
+      else if (c.code === 'mode') entry.ac.mode = String(c.value);
+    });
+  } else if (cmd.type === 'switch'){
+    entry.switchValues = {};
+    (cmd.codes||[]).forEach(c => { entry.switchValues[c.code] = c.value; });
+  } else if (cmd.type === 'generic'){
+    const c = (cmd.codes||[])[0] || { code:'', value:'' };
+    entry.generic = { code: c.code, value: String(c.value) };
+  }
+  return entry;
+}
+function openEditModal(rule){
+  editingRuleId = rule.id;
+  document.getElementById('modalTitle').textContent = 'ແກ້ໄຂກົດ';
+  document.getElementById('ruleName').value = rule.name;
+  const cfg = rule.trigger_config || {};
+  if (rule.trigger_type === 'schedule'){
+    setTriggerType('schedule');
+    document.getElementById('scheduleTime').value = cfg.time || '19:00';
+    document.getElementById('scheduleRepeat').value = cfg.repeat || 'daily';
+  } else {
+    setTriggerType('device');
+    populateTriggerDeviceSelect();
+    document.getElementById('triggerDevice').value = cfg.device_tuya_id || '';
+    populateTriggerCodeSelect();
+    document.getElementById('triggerCode').value = cfg.code || '';
+    document.getElementById('triggerOp').value = cfg.op || '==';
+    document.getElementById('triggerValue').value = String(cfg.value ?? '');
+  }
+  const actions = STATE.actions.filter(a => a.rule_id === rule.id);
+  STATE.editingActions = actions.map(commandToEntry);
+  renderActionsContainer();
+  document.getElementById('overlay').classList.add('show');
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+document.getElementById('newRuleBtn').addEventListener('click', openModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id==='overlay') closeModal(); });
+
+document.getElementById('saveRuleBtn').addEventListener('click', async () => {
+  const name = document.getElementById('ruleName').value.trim();
+  if (!name){ toast('ຕ້ອງໃສ່ຊື່ກົດ', true); return; }
+  if (STATE.editingActions.length === 0){ toast('ຕ້ອງມີຢ່າງໜ້ອຍ 1 action', true); return; }
+
+  let trigger_type, trigger_config;
+  if (currentTriggerType === 'device'){
+    const tid = document.getElementById('triggerDevice').value;
+    const code = document.getElementById('triggerCode').value;
+    const op = document.getElementById('triggerOp').value;
+    const rawVal = document.getElementById('triggerValue').value.trim();
+    if (!tid || !code || !rawVal){ toast('ຕ້ອງໃສ່ຂໍ້ມູນ trigger ໃຫ້ຄົບ', true); return; }
+    trigger_type = 'device_state';
+    trigger_config = { device_tuya_id: tid, code, op, value: parseTriggerValue(rawVal) };
+  } else {
+    const time = document.getElementById('scheduleTime').value;
+    const repeat = document.getElementById('scheduleRepeat').value;
+    if (!time){ toast('ຕ້ອງໃສ່ໂມງ', true); return; }
+    trigger_type = 'schedule';
+    trigger_config = { time, repeat };
+  }
+
+  const actionsPayload = [];
+  for (const entry of STATE.editingActions){
+    const dev = deviceByTuyaId(entry.targetTuyaId);
+    if (!dev){ toast('ອຸປະກອນ action ບໍ່ຖືກຕ້ອງ', true); return; }
+    let command;
+    if (dev.category === 'infrared_ac'){
+      const cmds = [];
+      if (entry.ac.power !== '') cmds.push({ code:'power', value: Number(entry.ac.power) });
+      if (entry.ac.temp !== '') cmds.push({ code:'temp', value: Number(entry.ac.temp) });
+      if (entry.ac.fan !== '') cmds.push({ code:'fan', value: Number(entry.ac.fan) });
+      if (entry.ac.mode !== '') cmds.push({ code:'mode', value: Number(entry.ac.mode) });
+      command = { type:'ac', commands: cmds };
+    } else if (entry.switchValues && Object.keys(entry.switchValues).length){
+      command = { type:'switch', codes: Object.entries(entry.switchValues).map(([code,value]) => ({code,value})) };
+    } else if (entry.generic && entry.generic.code){
+      command = { type:'generic', codes: [{ code: entry.generic.code, value: parseTriggerValue(entry.generic.value) }] };
+    } else {
+      toast('ຕ້ອງຕັ້ງຄ່າ action ໃຫ້ຄົບຢ່າງໜ້ອຍ 1 ອຸປະກອນ', true);
+      return;
+    }
+    actionsPayload.push({ target_device_id: dev.id, command });
+  }
+
+  try{
+    let ruleId;
+    if (editingRuleId){
+      const { error: updErr } = await sb.from('automation_rules')
+        .update({ name, trigger_type, trigger_config }).eq('id', editingRuleId);
+      if (updErr) throw updErr;
+      ruleId = editingRuleId;
+      const { error: delErr } = await sb.from('automation_actions').delete().eq('rule_id', ruleId);
+      if (delErr) throw delErr;
+    } else {
+      const { data: ruleRow, error: ruleErr } = await sb.from('automation_rules')
+        .insert({ name, trigger_type, trigger_config, enabled: true })
+        .select().single();
+      if (ruleErr) throw ruleErr;
+      ruleId = ruleRow.id;
+    }
+
+    const rows = actionsPayload.map((a, idx) => ({
+      rule_id: ruleId, target_device_id: a.target_device_id, command: a.command,
+      delay_seconds: 0, sort_order: idx,
+    }));
+    const { error: actErr } = await sb.from('automation_actions').insert(rows);
+    if (actErr) throw actErr;
+
+    toast(editingRuleId ? 'ແກ້ໄຂກົດແລ້ວ' : 'ບັນທຶກກົດແລ້ວ');
+    logActivity((editingRuleId?'ແກ້ໄຂກົດ ':'ສ້າງກົດໃໝ່ ') + name);
+    closeModal();
+    loadAll();
+  }catch(e){
+    toast('ບັນທຶກລົ້ມເຫຼວ: ' + (e.message||e), true);
+  }
+});
+function parseTriggerValue(raw){
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  const n = Number(raw);
+  if (!Number.isNaN(n) && raw !== '') return n;
+  return raw;
+}
+
+// ຮັບ realtime ຂອງອຸປະກອນທັງໝົດ (ບໍ່ຈຳກັດແຄ່ໂຕດຽວ) — ພໍ listener/Smart Life/ອື່ນໆ ຂຽນ DB
+// ປ່ຽນຄ່າອຸປະກອນໃດກໍຕາມ ໜ້າ grid ຈະອັບເດດເອງທັນທີ ບໍ່ຕ້ອງກົດ ↻. Subscribe ຄັ້ງດຽວຕອນເປີດແອັບ
+// (ບໍ່ແມ່ນ timer/polling — ເປັນ push ຈາກ Supabase, ຮັບໄດ້ໂດຍບໍ່ຈຳກັດຈຳນວນອຸປະກອນ).
+function subscribeDeviceRealtime(){
+  sb.channel('iot_devices_all_live')
+    .on('postgres_changes', { event:'*', schema:'public', table:'iot_devices' }, (payload) => {
+      try{
+        if (payload.eventType === 'DELETE') return;
+        const row = payload.new;
+        if (!row || EXCLUDED_TUYA_IDS.has(row.tuya_device_id)) return;
+        const idx = STATE.devices.findIndex(d => d.id === row.id);
+        if (idx >= 0){
+          // ບໍ່ສ້າງ object ໃໝ່ (Object.assign({}, ...)) — ອັນນັ້ນທຳລາຍ reference, ເຮັດໃຫ້ໜ້າ
+          // ລະອຽດທີ່ເປີດຄ້າງໄວ້ (ອ້າງອີງ object ເກົ່າ) ກັບ grid ຫຼັກ (ໃຊ້ object ໃໝ່) ແຍກກັນ,
+          // ໄອຄອນນອກເລີຍບໍ່ອັບເດດ. Mutate ໂຕດຽວກັນເລີຍ ໃຫ້ທຸກບ່ອນທີ່ຖື reference ນີ້ຢູ່ເຫັນຄ່າໃໝ່ນຳກັນ.
+          Object.assign(STATE.devices[idx], row);
+        } else {
+          STATE.devices.push(row);
+          STATE.devices.sort((a,b) => a.name.localeCompare(b.name));
+        }
+        renderRoomTabs();
+        renderDeviceGrid();
+        if (activeDetailDeviceId && row.id === activeDetailDeviceId && activeDetailLiveUpdate){
+          activeDetailLiveUpdate(row);
+        }
+        if (activeGateSensorRefresh && Object.values(GATE_SENSOR_PAIR).includes(row.tuya_device_id)){
+          activeGateSensorRefresh();
+        }
+      }catch(e){ /* non-fatal */ }
+    })
+    .subscribe();
+}
+
+let bootedOnce = false;
+function boot(){
+  if (bootedOnce) return; // ກັນ boot() ຮັນຊ້ຳ (login ໃໝ່ຫຼັງ logout ຄືນ ຈະບໍ່ subscribe realtime ຊ້ຳຊ້ອນ)
+  bootedOnce = true;
+  loadAll().then(subscribeDeviceRealtime);
+}
+
+// ຈຸດເລີ່ມຕົ້ນແອັບ — ຕ້ອງ login ກ່ອນຈຶ່ງເລີ່ມໂຫຼດຂໍ້ມູນ (ຄືກັນລະບົບ Sykhai)
+(function initAuthGate(){
+  const existing = loadSession();
+  if (existing){
+    CURRENT_USER = existing;
+    showApp();
+    boot();
+  } else {
+    showLoginScreen();
+  }
+})();
+</script>
+</body>
+</html>
