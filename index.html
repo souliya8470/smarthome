@@ -679,7 +679,12 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 //         ມີປຸ່ມ "✕ ສະແດງທັງໝົດ" ໄວ້ລ້າງ filter ຄືນ. ບໍ່ໄດ້ແກ້ໂຄງສ້າງຕາຕະລາງ/ການຮັນ schedule ຫຍັງ —
 //         ແຕ່ເປັນ UI ໃໝ່ເທິງລະບົບເກົ່າ. ຂອບເຂດ: ສະເພາະສະວິດ/ໄຟ (switchDetailHtml) ຕາມທີ່ Tar ຂໍ —
 //         ບໍ່ແຕະ AC/ປະຕູ/ມິເຕີ
-const APP_VERSION = 'v1.38';
+//
+// v1.39 — ແອ: ເພີ່ມປຸ່ມ "⏰ ຕັ້ງເວລາ" ໃນໜ້າແອ (acDetailHtml) ຄືກັບສະວິດ/ໄຟ
+//         ກົດແອໃນ "ຕັ້ງກົດ" ຕັ້ງໄດ້ຄົບທຸກຢ່າງທີ່ກົດໄດ້ໃນໜ້າແອ: ເປີດ/ປິດ, ອຸນຫະພູມ, ໂໝດ,
+//         ພັດລົມ, ສ່າຍລົມ(ໃບສະວິງ), ເທີໂບ, ໄຟຈໍ, ໂໝດນອນ (ເດີມມີແຕ່ 4 ຢ່າງທຳອິດ)
+//         ລາຍການກົດສະແດງ action ແອເປັນພາສາລາວ ແທນ code=ຄ່າ
+const APP_VERSION = 'v1.39';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -2249,13 +2254,19 @@ function acDetailHtml(dev){
         ຄ່າທີ່ເຫັນໃນຈໍນີ້ຄືຄ່າຈິງຂອງແອ ເວັ້ນແຕ່ມີຄົນໃຊ້ລີໂມດແທ້ແຊກ
       </div>
     </div>
-    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+    <div class="modal-actions">
+      <button class="btn" id="deviceScheduleBtn">⏰ ຕັ້ງເວລາ</button>
+      <button class="btn" id="closeDetailBtn">ປິດ</button>
+    </div>
   `;
 }
 
 function wireAcDetail(dev){
   const modal = document.getElementById('deviceModal');
   modal.querySelector('#closeDetailBtn').addEventListener('click', closeDeviceDetail);
+  // v1.39: ປຸ່ມ "⏰ ຕັ້ງເວລາ" ໃນໜ້າແອ (ຄືກັບສະວິດ/ໄຟ ໃນ v1.38)
+  const acSchedBtn = modal.querySelector('#deviceScheduleBtn');
+  if (acSchedBtn) acSchedBtn.addEventListener('click', () => goToRulesPage(dev.id));
 
   // ສຳເນົາສະຖານະມາເກັບໄວ້ໃນໜ້ານີ້ ແກ້ໄຂແລ້ວຄ່ອຍສົ່ງທັງກ້ອນ
   let ac = acStateOf(dev);
@@ -2549,7 +2560,22 @@ function describeAction(a){
   const name = dev ? dev.name : '(ອຸປະກອນຖືກລຶບ)';
   const cmd = a.command || {};
   if (cmd.type === 'ac'){
-    const parts = (cmd.commands||[]).map(c => `${c.code}=${c.value}`).join(', ');
+    // v1.39: ສະແດງເປັນພາສາລາວ ແທນ code=ຄ່າ
+    const v = (c) => Number(c.value);
+    const onoff = (c) => v(c) ? 'ເປີດ' : 'ປິດ';
+    const parts = (cmd.commands||[]).map(c => {
+      switch (c.code){
+        case 'power': return v(c) ? 'ເປີດແອ' : 'ປິດແອ';
+        case 'temp':  return v(c) + '°C';
+        case 'mode':  return 'ໂໝດ ' + (AC_MODE_LABELS[v(c)] ?? c.value);
+        case 'fan':   return 'ພັດລົມ ' + (AC_FAN_LABELS[v(c)] ?? c.value);
+        case 'swing': case 'swing_v': return 'ສ່າຍລົມ ' + (AC_SWING_LABELS[v(c)] ?? c.value);
+        case 'turbo': return 'ເທີໂບ ' + onoff(c);
+        case 'light': return 'ໄຟຈໍ ' + onoff(c);
+        case 'sleep': return 'ໂໝດນອນ ' + onoff(c);
+        default: return `${c.code}=${c.value}`;
+      }
+    }).join(', ');
     return `${name}: ${parts}`;
   }
   if (cmd.type === 'switch'){
@@ -2945,48 +2971,64 @@ function switchControlsHtml(i, entry, switches, dev){
     <div id="swValueRows-${i}" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
   </div>`;
 }
+// v1.39: ຕັ້ງໄດ້ຄົບທຸກຢ່າງທີ່ກົດໄດ້ໃນໜ້າແອ — ເປີດ/ປິດ, ອຸນຫະພູມ, ໂໝດ, ພັດລົມ,
+// ສ່າຍລົມ, ເທີໂບ, ໄຟຈໍ, ໂໝດນອນ. ຊ່ອງທີ່ເລືອກ "(ບໍ່ປ່ຽນ)" ຈະໃຊ້ຄ່າເກົ່າຂອງແອ
+function acRuleSelectHtml(cls, i, cur, options, allowKeep){
+  return `<select class="${cls}" data-idx="${i}">` +
+    (allowKeep ? `<option value="">(ບໍ່ປ່ຽນ)</option>` : '') +
+    options.map(o => `<option value="${o.v}" ${String(cur)===String(o.v)?'selected':''}>${o.l}</option>`).join('') +
+    `</select>`;
+}
 function acControlsHtml(i, entry){
   if (!entry.ac) entry.ac = { power:'1', temp:24, fan:'', mode:'' };
+  ['power','temp','mode','fan','swing','turbo','light','sleep'].forEach(k => { if (entry.ac[k] === undefined) entry.ac[k] = ''; });
+  const OFFON = [{ v:'1', l:'ເປີດ' }, { v:'0', l:'ປິດ' }];
+  const modeOpts  = AC_MODE_LABELS.map((l, v) => ({ v:String(v), l: AC_MODE_ICONS[v] + ' ' + l }));
+  const fanOpts   = AC_FAN_LABELS.map((l, v) => ({ v:String(v), l }));
+  const swingOpts = AC_SWING_LABELS.map((l, v) => ({ v:String(v), l }));
   return `
   <div class="row2">
     <div class="field">
       <label>ພະລັງງານ</label>
-      <select class="ac-power" data-idx="${i}">
-        <option value="1" ${entry.ac.power==='1'?'selected':''}>ເປີດ</option>
-        <option value="0" ${entry.ac.power==='0'?'selected':''}>ປິດ</option>
-      </select>
+      ${acRuleSelectHtml('ac-power', i, entry.ac.power, OFFON, false)}
     </div>
     <div class="field">
       <label>ອຸນຫະພູມ (°C)</label>
-      <input type="number" class="ac-temp" data-idx="${i}" min="16" max="30" value="${entry.ac.temp}">
+      <input type="number" class="ac-temp" data-idx="${i}" min="${AC_TEMP_MIN}" max="${AC_TEMP_MAX}" value="${entry.ac.temp}" placeholder="(ບໍ່ປ່ຽນ)">
     </div>
   </div>
   <div class="row2">
     <div class="field">
-      <label>ຄວາມແຮງພັດລົມ</label>
-      <select class="ac-fan" data-idx="${i}">
-        <option value="">(ບໍ່ປ່ຽນ)</option>
-        <option value="0" ${entry.ac.fan==='0'?'selected':''}>ອັດຕະໂນມັດ</option>
-        <option value="1" ${entry.ac.fan==='1'?'selected':''}>ອ່ອນ</option>
-        <option value="2" ${entry.ac.fan==='2'?'selected':''}>ກາງ</option>
-        <option value="3" ${entry.ac.fan==='3'?'selected':''}>ແຮງ</option>
-      </select>
+      <label>ໂໝດ</label>
+      ${acRuleSelectHtml('ac-mode', i, entry.ac.mode, modeOpts, true)}
     </div>
     <div class="field">
-      <label>ໂໝດ</label>
-      <select class="ac-mode" data-idx="${i}">
-        <option value="">(ບໍ່ປ່ຽນ)</option>
-        <option value="0" ${entry.ac.mode==='0'?'selected':''}>ອັດຕະໂນມັດ</option>
-        <option value="1" ${entry.ac.mode==='1'?'selected':''}>ເຢັນ</option>
-        <option value="2" ${entry.ac.mode==='2'?'selected':''}>ແຫ້ງ</option>
-        <option value="3" ${entry.ac.mode==='3'?'selected':''}>ພັດລົມ</option>
-        <option value="4" ${entry.ac.mode==='4'?'selected':''}>ຮ້ອນ</option>
-      </select>
+      <label>ຄວາມແຮງພັດລົມ</label>
+      ${acRuleSelectHtml('ac-fan', i, entry.ac.fan, fanOpts, true)}
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field">
+      <label>ສ່າຍລົມ (ໃບສະວິງ)</label>
+      ${acRuleSelectHtml('ac-swing', i, entry.ac.swing, swingOpts, true)}
+    </div>
+    <div class="field">
+      <label>ເທີໂບ ⚡</label>
+      ${acRuleSelectHtml('ac-turbo', i, entry.ac.turbo, OFFON, true)}
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field">
+      <label>ໄຟຈໍ 💡</label>
+      ${acRuleSelectHtml('ac-light', i, entry.ac.light, OFFON, true)}
+    </div>
+    <div class="field">
+      <label>ໂໝດນອນ 🌙</label>
+      ${acRuleSelectHtml('ac-sleep', i, entry.ac.sleep, OFFON, true)}
     </div>
   </div>
   <div class="hint">ຄວບຄຸມຜ່ານ Smart IR — ຕ້ອງໃຫ້ໂຕຮັບ IR ຢູ່ໃນລະດັບສາຍຕາກົງກັບແອ<br>
-  v1.34: ເລກໂໝດ ແລະ ພັດລົມ ປ່ຽນໃຫ້ກົງກັບໂປຣໂຕຄອນ Gree ແລ້ວ
-  ກົດທີ່ມີຢູ່ກ່ອນໜ້ານີ້ໃຫ້ເປີດເຂົ້າມາເລືອກຄືນເທື່ອໜຶ່ງ</div>`;
+  ຊ່ອງທີ່ເປັນ "(ບໍ່ປ່ຽນ)" ຈະໃຊ້ຄ່າລ່າສຸດຂອງແອ · ເທີໂບໃຊ້ໄດ້ສະເພາະໂໝດເຢັນ ຫຼື ຮ້ອນ</div>`;
 }
 function genericControlsHtml(i, entry, dev){
   if (!entry.generic) entry.generic = { code:'', value:'' };
@@ -3020,6 +3062,10 @@ function wireActionControls(box, entry, i){
   if (acFan) acFan.addEventListener('change', () => entry.ac.fan = acFan.value);
   const acMode = box.querySelector(`.ac-mode[data-idx="${i}"]`);
   if (acMode) acMode.addEventListener('change', () => entry.ac.mode = acMode.value);
+  ['swing','turbo','light','sleep'].forEach(k => {
+    const el = box.querySelector(`.ac-${k}[data-idx="${i}"]`);
+    if (el) el.addEventListener('change', () => entry.ac[k] = el.value);
+  });
   const genCode = box.querySelector(`.gen-code[data-idx="${i}"]`);
   if (genCode) genCode.addEventListener('input', () => entry.generic.code = genCode.value);
   const genValue = box.querySelector(`.gen-value[data-idx="${i}"]`);
@@ -3067,12 +3113,16 @@ function commandToEntry(action){
   const entry = { targetTuyaId: dev ? dev.tuya_device_id : '' };
   const cmd = action.command || {};
   if (cmd.type === 'ac'){
-    entry.ac = { power:'', temp:'', fan:'', mode:'' };
+    entry.ac = { power:'', temp:'', fan:'', mode:'', swing:'', turbo:'', light:'', sleep:'' };
     (cmd.commands||[]).forEach(c => {
       if (c.code === 'power') entry.ac.power = String(c.value);
       else if (c.code === 'temp') entry.ac.temp = c.value;
       else if (c.code === 'fan') entry.ac.fan = String(c.value);
       else if (c.code === 'mode') entry.ac.mode = String(c.value);
+      else if (c.code === 'swing' || c.code === 'swing_v') entry.ac.swing = String(c.value);
+      else if (c.code === 'turbo') entry.ac.turbo = String(c.value);
+      else if (c.code === 'light') entry.ac.light = String(c.value);
+      else if (c.code === 'sleep') entry.ac.sleep = String(c.value);
     });
   } else if (cmd.type === 'switch'){
     entry.switchValues = {};
@@ -3164,6 +3214,11 @@ document.getElementById('saveRuleBtn').addEventListener('click', async () => {
       if (entry.ac.temp !== '') cmds.push({ code:'temp', value: Number(entry.ac.temp) });
       if (entry.ac.fan !== '') cmds.push({ code:'fan', value: Number(entry.ac.fan) });
       if (entry.ac.mode !== '') cmds.push({ code:'mode', value: Number(entry.ac.mode) });
+      // v1.39: send-ac-command ຮັບ code 'swing' (ແປງເປັນ swing_v ເອງ), 'turbo', 'light', 'sleep'
+      ['swing','turbo','light','sleep'].forEach(k => {
+        if (entry.ac[k] !== undefined && entry.ac[k] !== '') cmds.push({ code:k, value: Number(entry.ac[k]) });
+      });
+      if (!cmds.length){ toast('ແອ: ຕ້ອງຕັ້ງຢ່າງໜ້ອຍ 1 ຄ່າ', true); return; }
       command = { type:'ac', commands: cmds };
     } else if (entry.switchValues && Object.keys(entry.switchValues).length){
       command = { type:'switch', codes: Object.entries(entry.switchValues).map(([code,value]) => ({code,value})) };
