@@ -670,7 +670,16 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 //         ສາເຫດ: ມີແຕ່ wireSensorDetail ທີ່ຕັ້ງ activeDetailLiveUpdate ໄວ້
 //         ສ່ວນໜ້າສະວິດ ແລະ ໜ້າມິເຕີ ບໍ່ໄດ້ຕັ້ງ ຈຶ່ງບໍ່ຮັບຮູ້ການປ່ຽນແປງທີ່ເຂົ້າມາ
 //         (ຝັ່ງເຊີເວີກໍແກ້ນຳ: ຕາຕະລາງ iot_devices ບໍ່ໄດ້ຢູ່ໃນ realtime publication)
-const APP_VERSION = 'v1.37';
+//
+// v1.38 — ເພີ່ມປຸ່ມ "⏰ ຕັ້ງເວລາ" ຢູ່ໜ້າລາຍລະອຽດຂອງສະວິດ/ໄຟ (switchDetailHtml) — ກົດເຂົ້າ
+//         ອຸປະກອນກ່ອນ ແລ້ວຄ່ອຍຕັ້ງຕາຕະລາງເວລາຂອງອຸປະກອນນັ້ນໂດຍກົງ ຄືກັນ Smart Life
+//         (ກ່ອນນີ້ຕ້ອງໄປໜ້າ "ຕັ້ງກົດ" ລວມ ເຊິ່ງເຫັນທຸກກົດຂອງທຸກອຸປະກອນປົນກັນ ສັບສົນ ຖ້າມີຫຼາຍກົດ)
+//         ກົດ "⏰" → ພາໄປໜ້າ "ຕັ້ງກົດ" ແຕ່ກອງໃຫ້ເຫັນສະເພາະກົດຂອງອຸປະກອນນັ້ນ (STATE.ruleDeviceFilter)
+//         ແລະ "+ ສ້າງກົດໃໝ່" ຈາກຈຸດນີ້ຈະຕັ້ງຄ່າອຸປະກອນ + trigger ເປັນ "ຕາມເວລາ" ໃຫ້ອັດຕະໂນມັດ
+//         ມີປຸ່ມ "✕ ສະແດງທັງໝົດ" ໄວ້ລ້າງ filter ຄືນ. ບໍ່ໄດ້ແກ້ໂຄງສ້າງຕາຕະລາງ/ການຮັນ schedule ຫຍັງ —
+//         ແຕ່ເປັນ UI ໃໝ່ເທິງລະບົບເກົ່າ. ຂອບເຂດ: ສະເພາະສະວິດ/ໄຟ (switchDetailHtml) ຕາມທີ່ Tar ຂໍ —
+//         ບໍ່ແຕະ AC/ປະຕູ/ມິເຕີ
+const APP_VERSION = 'v1.38';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -1004,6 +1013,7 @@ const STATE = {
   currentRoom: 'ໜ້າດ່ວນ',
   reorderMode: false,
   roomOrder: null,
+  ruleDeviceFilter: null, // v1.38: device.id — ບໍ່ null = ໜ້າ "ຕັ້ງກົດ" ກອງເຫັນສະເພາະອຸປະກອນນີ້
 };
 
 function toast(msg, isErr){
@@ -1022,12 +1032,26 @@ function confirmModal(msg){ return window.confirm(msg); }
 // =====================================================================
 document.querySelectorAll('.tabbtn').forEach(btn => {
   btn.addEventListener('click', () => {
+    // v1.38: ກົດແທັບ "ຕັ້ງກົດ" ດ້ວຍຕົນເອງ (ບໍ່ແມ່ນມາຈາກປຸ່ມ "⏰" ໃນໜ້າອຸປະກອນ) = ລ້າງ filter, ເຫັນທຸກກົດ
+    if (btn.dataset.page === 'pageRules' && STATE.ruleDeviceFilter){
+      STATE.ruleDeviceFilter = null;
+      renderRules();
+    }
     document.querySelectorAll('.tabbtn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.page).classList.add('active');
   });
 });
+// v1.38: ເອີ້ນຈາກປຸ່ມ "⏰ ຕັ້ງເວລາ" ຢູ່ໜ້າລາຍລະອຽດອຸປະກອນ — ປິດໜ້າລາຍລະອຽດ, ຕັ້ງ filter,
+// ແລ້ວພາໄປໜ້າ "ຕັ້ງກົດ" ແບບກອງເຫັນສະເພາະອຸປະກອນນີ້
+function goToRulesPage(deviceId){
+  STATE.ruleDeviceFilter = deviceId || null;
+  closeDeviceDetail();
+  document.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b.dataset.page === 'pageRules'));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'pageRules'));
+  renderRules();
+}
 
 // =====================================================================
 // SHARED DATA LOAD
@@ -1495,6 +1519,11 @@ function switchDetailHtml(dev){
       </div>
     </div>`;
   const footer = `<div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>`;
+  // v1.38: footer ສຳລັບສະວິດ/ໄຟ ທີ່ຕັ້ງເວລາໄດ້ — ມີປຸ່ມ "⏰ ຕັ້ງເວລາ" ເພີ່ມ (ບໍ່ໃຊ້ກັບປະຕູ 4-ຊ່ອງ)
+  const footerWithSchedule = `<div class="modal-actions">
+      <button class="btn" id="deviceScheduleBtn">⏰ ຕັ້ງເວລາ</button>
+      <button class="btn" id="closeDetailBtn">ປິດ</button>
+    </div>`;
 
   // ຮູບແບບ 1: ປະຕູ 4-ຊ່ອງ ທີ່ຮູ້ຈັກ — grid ປຸ່ມ ເປີດ/ປິດ/ຢຸດ/ລ໋ອກ ຄືກັນ Smart Life
   if (GATE_4CH_LABELS[dev.tuya_device_id]){
@@ -1517,7 +1546,7 @@ function switchDetailHtml(dev){
         <button class="big-toggle ${(!pulse && on) ? 'on':''}" data-code="${code}" data-pulse="${pulse?'1':'0'}">${pulse ? 'ກົດ' : (on?'ON':'OFF')}</button>
         <div class="big-toggle-label">${pulse ? 'ກົດເພື່ອສັ່ງ (ບໍ່ຄ້າງສະຖານະ)' : escapeHtml(switchLabel(dev, code, code))} <button type="button" class="rename-btn-inline" data-code="${code}" title="ປ່ຽນຊື່">✏️</button></div>
       </div>
-    ` + footer;
+    ` + (pulse ? footer : footerWithSchedule);
   }
 
   // ຮູບແບບ 3: ໄຟຫຼາຍດອກ — ກາດຫຼອດໄຟລຽນກັນ ຄືກັນ Smart Life
@@ -1530,13 +1559,17 @@ function switchDetailHtml(dev){
           <div class="bulb-name">${escapeHtml(switchLabel(dev, code, 'ດອກ '+(i+1)))}</div>
         </div>`).join('')}
     </div>
-  ` + footer;
+  ` + footerWithSchedule;
 }
 
 function wireSwitchDetail(dev){
   const modal = document.getElementById('deviceModal');
   const closeBtn = modal.querySelector('#closeDetailBtn');
   if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
+
+  // v1.38: ປຸ່ມ "⏰ ຕັ້ງເວລາ" — ພາໄປໜ້າ "ຕັ້ງກົດ" ແຕ່ກອງໃຫ້ເຫັນສະເພາະອຸປະກອນນີ້
+  const schedBtn = modal.querySelector('#deviceScheduleBtn');
+  if (schedBtn) schedBtn.addEventListener('click', () => goToRulesPage(dev.id));
 
   // v1.27: ອັບເດດໜ້ານີ້ແບບທັນທີ ເມື່ອມີຄົນກົດສະວິດດ້ວຍມືຢູ່ຝາ ຫຼື ສັ່ງຈາກແອັບອື່ນ
   // ແກ້ສະເພາະ element ທີ່ຕ້ອງປ່ຽນ ບໍ່ໄດ້ສ້າງໜ້າໃໝ່ທັງໝົດ ເພື່ອບໍ່ໃຫ້ຈໍກະພິບ
@@ -2528,11 +2561,28 @@ function describeAction(a){
 }
 function renderRules(){
   const box = document.getElementById('rulesContainer');
-  if (STATE.rules.length === 0){
-    box.innerHTML = `<div class="empty"><b>ຍັງບໍ່ມີກົດ</b>ກົດ "+ ສ້າງກົດໃໝ່" ເພື່ອເລີ່ມຕັ້ງອັດຕະໂນມັດ</div>`;
+
+  // v1.38: ກອງເຫັນສະເພາະກົດຂອງອຸປະກອນດຽວ ຖ້າເຂົ້າມາຈາກປຸ່ມ "⏰" ໃນໜ້າລາຍລະອຽດອຸປະກອນ
+  const filterId = STATE.ruleDeviceFilter;
+  const filterDev = filterId ? deviceById(filterId) : null;
+  const filterBannerHtml = filterDev ? `
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;
+                background:var(--bg-elev); border:1px solid var(--line); border-radius:var(--radius);
+                padding:10px 14px; margin-bottom:12px;">
+      <span>⏰ ສະແດງສະເພາະຕາຕະລາງຂອງ <b>${escapeHtml(filterDev.name)}</b></span>
+      <button type="button" class="btn btn-ghost" id="clearRuleFilterBtn">✕ ສະແດງທັງໝົດ</button>
+    </div>` : '';
+  const rulesToShow = filterId
+    ? STATE.rules.filter(r => STATE.actions.some(a => a.rule_id === r.id && a.target_device_id === filterId))
+    : STATE.rules;
+
+  if (rulesToShow.length === 0){
+    box.innerHTML = filterBannerHtml + `<div class="empty"><b>${filterDev ? 'ອຸປະກອນນີ້ຍັງບໍ່ມີຕາຕະລາງເວລາ' : 'ຍັງບໍ່ມີກົດ'}</b>ກົດ "+ ສ້າງກົດໃໝ່" ເພື່ອເລີ່ມຕັ້ງອັດຕະໂນມັດ</div>`;
+    const clearBtn0 = document.getElementById('clearRuleFilterBtn');
+    if (clearBtn0) clearBtn0.addEventListener('click', () => { STATE.ruleDeviceFilter = null; renderRules(); });
     return;
   }
-  box.innerHTML = STATE.rules.map(rule => {
+  box.innerHTML = filterBannerHtml + rulesToShow.map(rule => {
     const actions = STATE.actions.filter(a => a.rule_id === rule.id);
     const tagClass = rule.trigger_type === 'schedule' ? 'schedule' : 'device';
     return `
@@ -2591,6 +2641,9 @@ function renderRules(){
       loadAll();
     });
   });
+
+  const clearBtn = document.getElementById('clearRuleFilterBtn');
+  if (clearBtn) clearBtn.addEventListener('click', () => { STATE.ruleDeviceFilter = null; renderRules(); });
 }
 
 document.getElementById('triggerDeviceBtn').addEventListener('click', () => setTriggerType('device'));
@@ -2991,16 +3044,21 @@ function renderSwitchValueRows(box, entry, i){
 }
 
 let editingRuleId = null; // null = ສ້າງກົດໃໝ່, ບໍ່ null = ກຳລັງແກ້ໄຂກົດອັນນີ້ຢູ່
-function openModal(){
+// v1.38: prefillDeviceId — ຖ້າມາຈາກປຸ່ມ "⏰" ໃນໜ້າອຸປະກອນ, ຕັ້ງຄ່າອຸປະກອນ + trigger ເປັນ
+// "ຕາມເວລາ" ໃຫ້ອັດຕະໂນມັດ ບໍ່ໃຫ້ຕ້ອງເລືອກຄືນ
+function openModal(prefillDeviceId){
   editingRuleId = null;
   document.getElementById('modalTitle').textContent = 'ສ້າງກົດໃໝ່';
-  document.getElementById('ruleName').value = '';
+  const dev = prefillDeviceId ? deviceById(prefillDeviceId) : null;
+  document.getElementById('ruleName').value = dev ? ('ຕາຕະລາງເວລາ — ' + dev.name) : '';
   document.getElementById('triggerValue').value = '';
   const _vh = document.getElementById('triggerValueHint'); if (_vh) _vh.textContent = '';
-  setTriggerType('device');
+  setTriggerType(dev ? 'schedule' : 'device');
   populateTriggerDeviceSelect();
+  if (dev) document.getElementById('triggerDevice').value = dev.tuya_device_id;
   STATE.editingActions = [];
-  if (STATE.devices.length) addActionBlock();
+  if (dev) addActionBlock({ targetTuyaId: dev.tuya_device_id });
+  else if (STATE.devices.length) addActionBlock();
   else renderActionsContainer();
   document.getElementById('overlay').classList.add('show');
 }
@@ -3067,7 +3125,7 @@ function openEditModal(rule){
   document.getElementById('overlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
-document.getElementById('newRuleBtn').addEventListener('click', openModal);
+document.getElementById('newRuleBtn').addEventListener('click', () => openModal(STATE.ruleDeviceFilter));
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id==='overlay') closeModal(); });
 
