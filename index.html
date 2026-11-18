@@ -684,7 +684,11 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 //         ກົດແອໃນ "ຕັ້ງກົດ" ຕັ້ງໄດ້ຄົບທຸກຢ່າງທີ່ກົດໄດ້ໃນໜ້າແອ: ເປີດ/ປິດ, ອຸນຫະພູມ, ໂໝດ,
 //         ພັດລົມ, ສ່າຍລົມ(ໃບສະວິງ), ເທີໂບ, ໄຟຈໍ, ໂໝດນອນ (ເດີມມີແຕ່ 4 ຢ່າງທຳອິດ)
 //         ລາຍການກົດສະແດງ action ແອເປັນພາສາລາວ ແທນ code=ຄ່າ
-const APP_VERSION = 'v1.39';
+//
+// v1.40 — ແກ້ລຶບກົດບໍ່ໄດ້ ("ລຶບລົ້ມເຫຼວ") ສຳລັບກົດທີ່ເຄີຍຮັນແລ້ວ: ປະຫວັດ automation_run_log
+//         ກັນການລຶບໄວ້ (ແກ້ໃນຖານຂໍ້ມູນເປັນ ON DELETE SET NULL ແລ້ວ). ຝັ່ງແອັບລຶບແຕ່ກົດ
+//         ບໍ່ລຶບ action ກ່ອນ ເພື່ອບໍ່ໃຫ້ເຫຼືອກົດເປົ່າທີ່ບໍ່ມີ action ຖ້າລຶບບໍ່ສຳເລັດ
+const APP_VERSION = 'v1.40';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -2659,9 +2663,10 @@ function renderRules(){
       const id = card.dataset.id;
       const rule = STATE.rules.find(r=>r.id===id);
       if (!confirmModal(`ລຶບກົດ "${rule.name}" ບໍ່?`)) return;
-      const { error: e1 } = await sb.from('automation_actions').delete().eq('rule_id', id);
-      const { error: e2 } = await sb.from('automation_rules').delete().eq('id', id);
-      if (e1 || e2){ toast('ລຶບລົ້ມເຫຼວ', true); return; }
+      // v1.40: ລຶບແຕ່ກົດ — action ຖືກລຶບຕາມເອງ (ON DELETE CASCADE)
+      // ເມື່ອກ່ອນລຶບ action ກ່ອນ ແລ້ວລຶບກົດບໍ່ໄດ້ (ຕິດປະຫວັດການຮັນ) → ກົດຄ້າງຢູ່ ແຕ່ action ຫາຍ
+      const { error } = await sb.from('automation_rules').delete().eq('id', id);
+      if (error){ toast('ລຶບລົ້ມເຫຼວ: ' + (error.message || ''), true); return; }
       toast('ລຶບກົດແລ້ວ');
       logActivity('ລຶບກົດ ' + (rule?rule.name:id));
       loadAll();
