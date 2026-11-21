@@ -698,7 +698,10 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 // v1.42 — 🚧 ຕັ້ງຄ່າປະຕູ (owner): ຍ້າຍມາຈາກ Marketing Studio — ຊ່ວງເວລາຫ້າມສັ່ງປະຕູ
 //         ແລະ ເປີດປະຕູອັດຕະໂນມັດເມື່ອລົງໂມງເຂົ້າວຽກ (ເປີດ/ປິດ + %) ຕໍ່ປະຕູ.
 //         ເຂົ້າໄດ້ຈາກປຸ່ມ 🚧 ໜ້າອຸປະກອນ ແລະ "⚙️ ຕັ້ງຄ່າປະຕູ" ໃນໜ້າປະຕູ
-const APP_VERSION = 'v1.42';
+//
+// v1.43 — ແກ້ແອນິເມຊັນປະຕູເດັ້ງໄປມາລະຫວ່າງປະຕູຮົ້ວນ້ອຍ ກັບ ປະຕູຮ້ານໃໝ່ ເວລາສັ່ງ 2 ປະຕູຕິດກັນ:
+//         ຄຳສັ່ງຂອງໜ້າປະຕູທີ່ປິດໄປແລ້ວ ຍັງແຕ້ມທັບໜ້າປະຕູໃໝ່ (ເບິ່ງ disposed ໃນ wireGateDetail)
+const APP_VERSION = 'v1.43';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -2011,6 +2014,14 @@ function wireGateDetail(dev, config, state){
   const closeBtn = modal.querySelector('#closeDetailBtn');
   if (closeBtn) closeBtn.addEventListener('click', closeDeviceDetail);
 
+  // v1.43: ປ້ອງກັນ "ແອນິເມຊັນເດັ້ງໄປມາລະຫວ່າງ 2 ປະຕູ" — ທຸກໜ້າປະຕູໃຊ້ #deviceModal ອັນດຽວກັນ.
+  // ກົດປິດປະຕູ A ແລ້ວປິດໜ້າ ໄປເປີດປະຕູ B ທັນທີ: ຄຳສັ່ງຂອງ A ຍັງລໍ server ຢູ່ ພໍຕອບກັບມາ
+  // reloadGateState() ຂອງ A ຈະ startTickIfMoving() ຄືນໃໝ່ (ຫຼັງ stopAll ໄປແລ້ວ) → ticker ຂອງ A
+  // ແຕ້ມຮູບ/% ຂອງ A ທັບໃສ່ໜ້າ B ທຸກ 0.5 ວິ ແຂ່ງກັບ ticker ຂອງ B. ເມື່ອໜ້ານີ້ຖືກປິດ (disposed)
+  // ທຸກ callback ທີ່ຄ້າງຢູ່ຈະບໍ່ແຕ້ມ ແລະ ບໍ່ເລີ່ມ ticker ອີກ
+  let disposed = false;
+  const isStale = () => disposed || activeDetailDeviceId !== dev.id;
+
   let liveState = state;
   let liveConfig = config || {open_travel_seconds:26, close_travel_seconds:26, physical_press_delay_ms:1800, quick_open_pct:20};
   let tickTimer = null;
@@ -2020,6 +2031,7 @@ function wireGateDetail(dev, config, state){
   let predictedTargetPct = null;
 
   function renderSensorBadge(){
+    if (isStale()) return;
     const sensorTid = GATE_SENSOR_PAIR[dev.tuya_device_id];
     if (!sensorTid) return;
     const badge = modal.querySelector('#sensorBadge');
@@ -2047,6 +2059,7 @@ function wireGateDetail(dev, config, state){
 
   function renderLive(){
     let live = computeLiveGatePosition(liveState, liveConfig, Date.now());
+    if (isStale()){ stopTick(); return live; }
     if (predictedTargetPct !== null && live.isMoving){
       const reached = live.direction === 'opening' ? live.position >= predictedTargetPct : live.position <= predictedTargetPct;
       if (reached){
@@ -2071,6 +2084,7 @@ function wireGateDetail(dev, config, state){
   function stopTick(){ if (tickTimer){ clearInterval(tickTimer); tickTimer=null; } }
   function startTickIfMoving(){
     stopTick();
+    if (isStale()) return;
     if (!computeLiveGatePosition(liveState, liveConfig, Date.now()).isMoving) return;
     const startedAt = Date.now();
     const maxTravel = Math.max(liveConfig.open_travel_seconds||26, liveConfig.close_travel_seconds||26);
@@ -2096,7 +2110,7 @@ function wireGateDetail(dev, config, state){
   const gateChannel = sb.channel('gate_position_state_' + dev.tuya_device_id)
     .on('postgres_changes', { event:'*', schema:'public', table:'gate_position_state', filter:`device_id=eq.${dev.tuya_device_id}` }, (payload) => {
       try{
-        if (!payload.new) return;
+        if (!payload.new || isStale()) return;
         liveState = payload.new;
         predictedTargetPct = null; // ຄ່າຈິງມາແລ້ວ ບໍ່ຕ້ອງອີງໃສ່ການຄາດຄະເນອີກຕໍ່ໄປ
         renderLive();
@@ -2107,6 +2121,7 @@ function wireGateDetail(dev, config, state){
     .subscribe();
 
   function stopAll(){
+    disposed = true;
     stopTick();
     stopSensorPoll();
     sb.removeChannel(gateChannel);
@@ -2125,6 +2140,7 @@ function wireGateDetail(dev, config, state){
     const sensorTid = GATE_SENSOR_PAIR[dev.tuya_device_id];
     if (!sensorTid || sensorPollTimer) return;
     sensorPollTimer = setInterval(async () => {
+      if (isStale()){ stopSensorPoll(); return; }
       try{
         const { data: sData } = await sb.from('iot_devices').select('*').eq('tuya_device_id', sensorTid).maybeSingle();
         if (sData){
@@ -2139,12 +2155,14 @@ function wireGateDetail(dev, config, state){
   startSensorPoll();
 
   async function reloadGateState(){
+    if (isStale()) return;
     const [stateRes, configRes] = await Promise.all([
       sb.from('gate_position_state').select('*').eq('device_id', dev.tuya_device_id).maybeSingle(),
       sb.from('gate_position_config').select('*').eq('device_id', dev.tuya_device_id).maybeSingle(),
     ]);
     if (stateRes.data) liveState = stateRes.data;
     if (configRes.data) liveConfig = configRes.data;
+    if (isStale()) return; // ໜ້າຖືກປິດ/ປ່ຽນໄປປະຕູອື່ນ ຂະນະລໍຂໍ້ມູນ
     predictedTargetPct = null; // ຄ່າຈິງມາແລ້ວ ບໍ່ຕ້ອງອີງໃສ່ການຄາດຄະເນອີກຕໍ່ໄປ
     renderLive();
     startTickIfMoving();
