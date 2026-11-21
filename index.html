@@ -468,6 +468,7 @@
         <button class="icon-btn" id="reorderModeBtn" title="ຈັດລຳດັບອຸປະກອນ">🔀</button>
         <button class="icon-btn" id="verifyAllBtn" title="ຢືນຢັນສະຖານະຈິງທັງໝົດ">✅</button>
         <button class="icon-btn" id="refreshHomeBtn" title="ໂຫຼດຂໍ້ມູນໃໝ່">↻</button>
+        <button class="icon-btn" id="gateSettingsBtn" title="ຕັ້ງຄ່າປະຕູ" style="display:none;">🚧</button>
         <button class="icon-btn" id="manageUsersBtn" title="ຈັດການບັນຊີ" style="display:none;">👤</button>
         <button class="icon-btn" id="logoutBtn" title="ອອກຈາກລະບົບ">🚪</button>
       </div>
@@ -693,7 +694,11 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 //
 // v1.41 — ປຸ່ມ 📋 ສຳເນົາກົດ (ເປີດຟອມທີ່ມີຂໍ້ມູນເກົ່າຄົບ ແກ້ບາງຢ່າງແລ້ວບັນທຶກເປັນກົດໃໝ່)
 //         ແອ: ກົດເປີດຈາກແອັບ ຖ້າໂໝດເປັນອັດຕະໂນມັດ → ປ່ຽນເປັນເຢັນ; ກົດແອໃໝ່ ໂໝດເລີ່ມຕົ້ນ = ເຢັນ
-const APP_VERSION = 'v1.41';
+//
+// v1.42 — 🚧 ຕັ້ງຄ່າປະຕູ (owner): ຍ້າຍມາຈາກ Marketing Studio — ຊ່ວງເວລາຫ້າມສັ່ງປະຕູ
+//         ແລະ ເປີດປະຕູອັດຕະໂນມັດເມື່ອລົງໂມງເຂົ້າວຽກ (ເປີດ/ປິດ + %) ຕໍ່ປະຕູ.
+//         ເຂົ້າໄດ້ຈາກປຸ່ມ 🚧 ໜ້າອຸປະກອນ ແລະ "⚙️ ຕັ້ງຄ່າປະຕູ" ໃນໜ້າປະຕູ
+const APP_VERSION = 'v1.42';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -807,6 +812,7 @@ function showApp(){
   const isOwner = CURRENT_USER && CURRENT_USER.role === 'owner';
   document.getElementById('historyTabBtn').style.display = isOwner ? '' : 'none';
   document.getElementById('manageUsersBtn').style.display = isOwner ? '' : 'none';
+  document.getElementById('gateSettingsBtn').style.display = isOwner ? '' : 'none';
 }
 
 document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
@@ -930,6 +936,115 @@ async function createNewUser(){
   renderManageUsersModal();
 }
 document.getElementById('manageUsersBtn').addEventListener('click', openManageUsers);
+
+// =====================================================================
+// v1.42: ຕັ້ງຄ່າປະຕູ (ຍ້າຍມາຈາກ Marketing Studio) — ໃຊ້ຕາຕະລາງດຽວກັນ ແກ້ບ່ອນໃດກໍມີຜົນທັງສອງບ່ອນ
+//   gate_schedule_config (config_key='gate_command_block') — ຊ່ວງເວລາຫ້າມສັ່ງປະຕູ
+//     (tuya-gate-control / tuya-gate-auto-open ປະຕິເສດຄຳສັ່ງໃນຊ່ວງນີ້)
+//   gate_position_config.auto_open_on_clockin_enabled / _pct — ເປີດປະຕູອັດຕະໂນມັດ
+//     ເມື່ອພະນັກງານຄົນທຳອິດລົງໂມງເຂົ້າວຽກ (ລະບົບລົງເວລາເອີ້ນ tuya-gate-auto-open)
+// =====================================================================
+function gateNameOf(tuyaId){
+  const d = (STATE.devices || []).find(x => x.tuya_device_id === tuyaId);
+  return d ? d.name : tuyaId;
+}
+function openGateSettings(){
+  activeDetailDeviceId = null;
+  if (activeGateStopTick){ activeGateStopTick(); activeGateStopTick = null; }
+  renderGateSettingsModal();
+  document.getElementById('deviceOverlay').classList.add('show');
+}
+async function renderGateSettingsModal(){
+  const modal = document.getElementById('deviceModal');
+  modal.innerHTML = `
+    <h2 style="margin:0 0 4px;">🚧 ຕັ້ງຄ່າປະຕູ</h2>
+    <div class="modal-sub" style="margin-bottom:16px;">ຄ່າດຽວກັນກັບໃນ Marketing Studio — ແກ້ບ່ອນໃດກໍມີຜົນທັງສອງບ່ອນ</div>
+    <div id="gateSettingsBody">ກຳລັງໂຫຼດ...</div>
+    <div class="modal-actions">
+      <button class="btn" id="closeDetailBtn">ປິດ</button>
+      <button class="btn btn-accent" id="saveGateSettingsBtn" disabled>ບັນທຶກ</button>
+    </div>`;
+  modal.querySelector('#closeDetailBtn').addEventListener('click', closeDeviceDetail);
+
+  const [blk, cfgs] = await Promise.all([
+    sb.from('gate_schedule_config').select('*').eq('config_key', 'gate_command_block').maybeSingle(),
+    sb.from('gate_position_config').select('device_id,auto_open_on_clockin_enabled,auto_open_on_clockin_pct').order('id'),
+  ]);
+  const body = modal.querySelector('#gateSettingsBody');
+  if (!body) return;
+  if (blk.error || cfgs.error){
+    body.innerHTML = `<div class="empty">ໂຫຼດລົ້ມເຫຼວ: ${escapeHtml((blk.error||cfgs.error).message||'')}</div>`;
+    return;
+  }
+  const b = blk.data || { enabled:false, block_start_time:'22:00:00', block_end_time:'07:00:00' };
+  const hhmm = (t) => String(t || '').slice(0, 5);
+  const gates = cfgs.data || [];
+
+  body.innerHTML = `
+    <div class="field">
+      <label style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span><b>⛔ ຊ່ວງເວລາຫ້າມສັ່ງປະຕູ</b><br>
+          <small style="color:var(--text-dim);">ໃນຊ່ວງນີ້ ກົດເປີດປະຕູຈາກແອັບ ແລະ ການເປີດອັດຕະໂນມັດ ຈະຖືກປະຕິເສດ (ກັນຂະໂມຍ/ກົດຜິດຕອນກາງຄືນ)</small></span>
+        <label class="switch"><input type="checkbox" id="gsBlockEnabled" ${b.enabled?'checked':''}><span class="slider"></span></label>
+      </label>
+    </div>
+    <div class="row2">
+      <div class="field"><label>ເລີ່ມ</label><input type="time" id="gsBlockStart" value="${hhmm(b.block_start_time)}"></div>
+      <div class="field"><label>ເຖິງ</label><input type="time" id="gsBlockEnd" value="${hhmm(b.block_end_time)}"></div>
+    </div>
+    <hr class="divider">
+    <div style="font-weight:600; margin-bottom:4px;">🕘 ເປີດປະຕູອັດຕະໂນມັດ ເມື່ອພະນັກງານຄົນທຳອິດລົງໂມງເຂົ້າວຽກ</div>
+    <div class="hint" style="margin-bottom:10px;">ເປີດໃຫ້ສະເພາະຕອນປະຕູປິດຢູ່ ແລະ ບໍ່ຢູ່ໃນຊ່ວງເວລາຫ້າມ</div>
+    ${gates.map((g, i) => `
+      <div class="switch-row" style="gap:8px;">
+        <span style="flex:1; min-width:0;">${escapeHtml(gateNameOf(g.device_id))}</span>
+        <span style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+          <input type="number" class="gs-pct" data-i="${i}" min="5" max="100" step="5" value="${Number(g.auto_open_on_clockin_pct)||20}"
+                 style="width:58px; text-align:center; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 4px; font:inherit;"> %
+        </span>
+        <label class="switch"><input type="checkbox" class="gs-auto" data-i="${i}" ${g.auto_open_on_clockin_enabled?'checked':''}><span class="slider"></span></label>
+      </div>`).join('') || '<div class="hint">ບໍ່ພົບປະຕູ</div>'}
+  `;
+
+  const saveBtn = modal.querySelector('#saveGateSettingsBtn');
+  saveBtn.disabled = false;
+  saveBtn.addEventListener('click', async () => {
+    const start = body.querySelector('#gsBlockStart').value;
+    const end = body.querySelector('#gsBlockEnd').value;
+    const enabled = body.querySelector('#gsBlockEnabled').checked;
+    if (!start || !end){ toast('ຕ້ອງໃສ່ເວລາເລີ່ມ ແລະ ເວລາສິ້ນສຸດ', true); return; }
+    if (start === end){ toast('ເວລາເລີ່ມ ແລະ ສິ້ນສຸດ ຕ້ອງບໍ່ຄືກັນ', true); return; }
+    const updates = gates.map((g, i) => {
+      const pct = Math.round(Number(body.querySelector(`.gs-pct[data-i="${i}"]`).value));
+      const on = body.querySelector(`.gs-auto[data-i="${i}"]`).checked;
+      return { device_id: g.device_id, pct, on };
+    });
+    if (updates.some(u => !(u.pct >= 5 && u.pct <= 100))){ toast('% ຕ້ອງຢູ່ລະຫວ່າງ 5–100', true); return; }
+
+    saveBtn.disabled = true;
+    try{
+      const blockPatch = { enabled, block_start_time: start + ':00', block_end_time: end + ':00', updated_at: new Date().toISOString() };
+      const r1 = blk.data
+        ? await sb.from('gate_schedule_config').update(blockPatch).eq('config_key', 'gate_command_block')
+        : await sb.from('gate_schedule_config').insert(Object.assign({ config_key:'gate_command_block' }, blockPatch));
+      if (r1.error) throw r1.error;
+      for (const u of updates){
+        const r2 = await sb.from('gate_position_config')
+          .update({ auto_open_on_clockin_enabled: u.on, auto_open_on_clockin_pct: u.pct, updated_at: new Date().toISOString() })
+          .eq('device_id', u.device_id);
+        if (r2.error) throw r2.error;
+      }
+      toast('ບັນທຶກການຕັ້ງຄ່າປະຕູແລ້ວ');
+      logActivity('ຕັ້ງຄ່າປະຕູ', `ຫ້າມສັ່ງ ${enabled ? start + '–' + end : 'ປິດ'}; ` +
+        updates.map(u => gateNameOf(u.device_id) + ' ' + (u.on ? u.pct + '%' : 'ປິດ')).join(', '));
+      closeDeviceDetail();
+    }catch(e){
+      toast('ບັນທຶກລົ້ມເຫຼວ: ' + (e.message || e), true);
+      saveBtn.disabled = false;
+    }
+  });
+}
+document.getElementById('gateSettingsBtn').addEventListener('click', openGateSettings);
 
 const EXCLUDED_TUYA_IDS = new Set(['bf3df8b270bbcf270f3wzd']); // ປະຕູຮົ້ວນາເຄືອ - ເຮືອນອື່ນ, ຫ້າມສະແດງ
 
@@ -1881,10 +1996,16 @@ function gateDetailHtml(dev, config, state){
       ${quickRow}
       <div class="hint">ໃຊ້ Edge Function ດຽວກັນກັບລະບົບ Sykhai (tuya-gate-control)</div>
     </div>
-    <div class="modal-actions"><button class="btn" id="closeDetailBtn">ປິດ</button></div>
+    <div class="modal-actions">
+      ${(CURRENT_USER && CURRENT_USER.role === 'owner') ? '<button class="btn" id="gateSettingsFromDetailBtn">⚙️ ຕັ້ງຄ່າປະຕູ</button>' : ''}
+      <button class="btn" id="closeDetailBtn">ປິດ</button>
+    </div>
   `;
 }
 function wireGateDetail(dev, config, state){
+  // v1.42: ປຸ່ມ "⚙️ ຕັ້ງຄ່າປະຕູ" ໃນໜ້າປະຕູ (owner)
+  const gsBtn = document.getElementById('deviceModal').querySelector('#gateSettingsFromDetailBtn');
+  if (gsBtn) gsBtn.addEventListener('click', openGateSettings);
   const modal = document.getElementById('deviceModal');
   const gc = GATE_CONTROL_DEVICES[dev.tuya_device_id];
   const closeBtn = modal.querySelector('#closeDetailBtn');
