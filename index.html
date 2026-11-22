@@ -701,7 +701,10 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 //
 // v1.43 — ແກ້ແອນິເມຊັນປະຕູເດັ້ງໄປມາລະຫວ່າງປະຕູຮົ້ວນ້ອຍ ກັບ ປະຕູຮ້ານໃໝ່ ເວລາສັ່ງ 2 ປະຕູຕິດກັນ:
 //         ຄຳສັ່ງຂອງໜ້າປະຕູທີ່ປິດໄປແລ້ວ ຍັງແຕ້ມທັບໜ້າປະຕູໃໝ່ (ເບິ່ງ disposed ໃນ wireGateDetail)
-const APP_VERSION = 'v1.43';
+//
+// v1.44 — ແອ: ໜ້າແອ/ການ໌ດ ສະແດງສະຖານະຕາມຄຳສັ່ງ IR ລ່າສຸດທີ່ສົ່ງສຳເລັດແທ້ (syncAcTruth)
+//         ແກ້: ກົດຕາມເວລາເປີດແອແລ້ວ ແຕ່ໜ້າແອັບຍັງເປັນ "ປິດຢູ່" ເພາະ Bridge ຂຽນສຳເນົາເກົ່າທັບ
+const APP_VERSION = 'v1.44';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -1208,6 +1211,7 @@ async function loadAll(){
     renderRoomTabs();
     renderDeviceGrid();
     renderRules();
+    syncAcTruth(STATE.devices).then(() => refreshAcViews(STATE.devices.filter(d => d.category === 'infrared_ac')));
     const msg = `ໂຫຼດແລ້ວ — ${STATE.devices.length} ອຸປະກອນ, ${STATE.rules.length} ກົດ`;
     setStatus(true, msg);
   }catch(e){
@@ -1508,6 +1512,32 @@ async function callDeviceCommand(tuyaDeviceId, commands, skipConfirm){
 // ac = { power, mode, temp, fan, turbo, light, sleep, swing_v }
 // ໃສ່ສະເພາະຊ່ອງທີ່ຢາກປ່ຽນກໍໄດ້ ເຊີເວີຈະລວມກັບຄ່າເກົ່າໃຫ້ເອງ
 // ຜົນທີ່ຕອບກັບມາມີ state ຈິງທີ່ຖືກສົ່ງອອກໄປ ໃຫ້ເອົາອັນນັ້ນເປັນຫຼັກ
+// v1.44: ສະຖານະແອ IR ທີ່ເຊື່ອຖືໄດ້ = ຄຳສັ່ງ IR ລ່າສຸດທີ່ສົ່ງສຳເລັດແທ້ (device_command_queue)
+// ເຫດຜົນ: Bridge ຢູ່ເຮືອນ ແລະ ປຸ່ມ ✅ (refresh-all-device-status) ຂຽນ current_state ຂອງແອທັບ
+// ດ້ວຍສຳເນົາເກົ່າ → ກົດຕາມເວລາເປີດແອແລ້ວ (ແອແທ້ເປີດ) ແຕ່ໜ້າແອັບຍັງສະແດງ "ປິດຢູ່"
+// (ເຫັນຈິງ 21-22/11: ກົດ 17:50 ເປີດ, ຖືກທັບເປັນປິດຕອນ 18:20). ແອບອກສະຖານະກັບບໍ່ໄດ້
+// ສິ່ງດຽວທີ່ຖືກແນ່ນອນຄືສິ່ງທີ່ຍິງອອກໄປຫຼ້າສຸດ ຈຶ່ງເອົາອັນນັ້ນມາສະແດງ
+async function syncAcTruth(devs){
+  const acs = (devs || []).filter(d => d && d.category === 'infrared_ac');
+  await Promise.all(acs.map(async d => {
+    try{
+      const { data } = await sb.from('device_command_queue').select('commands,created_at')
+        .eq('device_id', d.tuya_device_id).eq('source', 'send-ac-command').eq('status', 'done')
+        .order('created_at', { ascending:false }).limit(1).maybeSingle();
+      const g = data && Array.isArray(data.commands) && data.commands[0] && data.commands[0].gree;
+      if (g && typeof g === 'object'){
+        d.current_state = Object.assign({}, d.current_state, { ac: g, power: g.power, temp: g.temp });
+      }
+    }catch(e){ /* ໃຊ້ຄ່າໃນ iot_devices ຕໍ່ໄປ */ }
+  }));
+}
+function refreshAcViews(devs){
+  renderDeviceGrid();
+  (devs || []).forEach(d => {
+    if (activeDetailDeviceId === d.id && activeDetailLiveUpdate) activeDetailLiveUpdate(d);
+  });
+}
+
 async function callAcState(acTuyaDeviceId, ac){
   const res = await fetch(`${SUPABASE_URL}/functions/v1/send-ac-command`, {
     method:'POST',
@@ -1561,6 +1591,7 @@ async function openDeviceDetail(tuyaId){
   if (dev.category === 'infrared_ac'){
     modal.innerHTML = acDetailHtml(dev);
     wireAcDetail(dev);
+    syncAcTruth([dev]).then(() => refreshAcViews([dev])); // v1.44: ດຶງສະຖານະຈິງລ່າສຸດຕອນເປີດໜ້າ
   } else if (dev.category === 'dlq'){
     modal.innerHTML = meterDetailHtml(dev);
     wireMeterDetail(dev);
@@ -3451,6 +3482,17 @@ function subscribeDeviceRealtime(){
         const row = payload.new;
         if (!row || EXCLUDED_TUYA_IDS.has(row.tuya_device_id)) return;
         const idx = STATE.devices.findIndex(d => d.id === row.id);
+        // v1.44: ແອ IR — ບໍ່ເຊື່ອ ac ທີ່ມາກັບແຖວນີ້ທັນທີ (ອາດເປັນສຳເນົາເກົ່າຈາກ Bridge)
+        // ຮັກສາຄ່າເດີມໄວ້ກ່ອນ ແລ້ວກວດກັບຄຳສັ່ງ IR ລ່າສຸດ ຈຶ່ງອັບເດດໜ້າຈໍ (ບໍ່ໃຫ້ກະພິບເປັນ "ປິດ")
+        const isIrAc = row.category === 'infrared_ac';
+        if (isIrAc && idx >= 0 && STATE.devices[idx].current_state && STATE.devices[idx].current_state.ac){
+          const keep = STATE.devices[idx].current_state;
+          row.current_state = Object.assign({}, row.current_state, { ac: keep.ac, power: keep.power, temp: keep.temp });
+        }
+        if (isIrAc){
+          const target = idx >= 0 ? STATE.devices[idx] : row;
+          setTimeout(() => syncAcTruth([target]).then(() => refreshAcViews([target])), 0);
+        }
         if (idx >= 0){
           // ບໍ່ສ້າງ object ໃໝ່ (Object.assign({}, ...)) — ອັນນັ້ນທຳລາຍ reference, ເຮັດໃຫ້ໜ້າ
           // ລະອຽດທີ່ເປີດຄ້າງໄວ້ (ອ້າງອີງ object ເກົ່າ) ກັບ grid ຫຼັກ (ໃຊ້ object ໃໝ່) ແຍກກັນ,
