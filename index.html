@@ -195,7 +195,34 @@
   .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
   @media (max-width:480px){ .row2,.row3{ grid-template-columns:1fr; } }
   .divider{ border:none; border-top:1px solid var(--line); margin:18px 0; }
-  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top: 14px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top: 14px; flex-wrap:wrap; }
+  /* v1.45: ປະຫວັດອຸນຫະພູມ/ຄວາມຊຸ່ມ — ສີ series ເລືອກແຍກແຕ່ລະ theme (ກວດ CVD/contrast ແລ້ວ) */
+  :root{ --th-temp:#e76624; --th-hum:#338ced; }
+  :root[data-theme="light"]{ --th-temp:#f47230; --th-hum:#257de0; }
+  .th-chips{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .th-chip{ border:1px solid var(--line); background:var(--bg-elev-2); color:var(--text-dim); border-radius:999px;
+            padding:5px 11px; font:inherit; font-size:12.5px; cursor:pointer; }
+  .th-chip.active{ background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:600; }
+  .th-chip:disabled{ opacity:.35; cursor:default; }
+  .th-block{ margin-top:12px; }
+  .th-head{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:2px; }
+  .th-title{ font-weight:600; display:flex; align-items:center; gap:6px; }
+  .th-title i{ display:inline-block; width:10px; height:3px; border-radius:2px; }
+  .th-now{ font-family:'Space Grotesk', sans-serif; font-size:22px; font-weight:700; }
+  .th-stats{ font-size:12px; color:var(--text-dim); margin-bottom:4px; }
+  .th-chart{ position:relative; touch-action:pan-y; }
+  .th-chart svg{ display:block; width:100%; height:auto; overflow:visible; }
+  .th-chart .grid{ stroke:var(--line); stroke-width:1; }
+  .th-chart .axis{ fill:var(--text-dim); font-size:10px; }
+  .th-chart .cross{ stroke:var(--text-dim); stroke-width:1; stroke-dasharray:3 3; }
+  .th-tip{ position:absolute; top:-4px; pointer-events:none; background:var(--bg-elev-2); border:1px solid var(--line);
+           border-radius:8px; padding:4px 8px; font-size:12px; white-space:nowrap; color:var(--text);
+           transform:translateX(-50%); box-shadow:0 2px 8px rgba(0,0,0,.25); display:none; }
+  .th-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }
+  .th-table th, .th-table td{ padding:5px 6px; border-bottom:1px solid var(--line); text-align:right; }
+  .th-table th:first-child, .th-table td:first-child{ text-align:left; }
+  .th-table-wrap{ max-height:260px; overflow:auto; }
+  .ac-indoor.clickable{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
 
   /* device detail modal specific */
   .detail-head{ display:flex; align-items:center; gap:12px; margin-bottom:20px; }
@@ -704,7 +731,10 @@ const SUPABASE_URL = 'https://swrijpkkufarddsyqhrh.supabase.co';
 //
 // v1.44 — ແອ: ໜ້າແອ/ການ໌ດ ສະແດງສະຖານະຕາມຄຳສັ່ງ IR ລ່າສຸດທີ່ສົ່ງສຳເລັດແທ້ (syncAcTruth)
 //         ແກ້: ກົດຕາມເວລາເປີດແອແລ້ວ ແຕ່ໜ້າແອັບຍັງເປັນ "ປິດຢູ່" ເພາະ Bridge ຂຽນສຳເນົາເກົ່າທັບ
-const APP_VERSION = 'v1.44';
+//
+// v1.45 — 📈 ປະຫວັດອຸນຫະພູມ/ຄວາມຊຸ່ມ: ເລືອກຊ່ວງ 1ຊມ–30ມື້ ແລະ ລາຍນາທີ/ຊົ່ວໂມງ/ວັນ, 2 ກຣາບແຍກ
+//         + ຕາຕະລາງ. ເຂົ້າຈາກໜ້າແອ (ກົດ "ໃນຫ້ອງ xx°C 📈" / "📈 ປະຫວັດ") ຫຼື ກົດເຊັນເຊີໂດຍກົງ
+const APP_VERSION = 'v1.45';
 (function setVersionTags(){
   const tag1 = document.getElementById('appVersionTag'); if (tag1) tag1.textContent = APP_VERSION;
   const tag2 = document.getElementById('appVersionTag2'); if (tag2) tag2.textContent = APP_VERSION;
@@ -1604,6 +1634,8 @@ async function openDeviceDetail(tuyaId){
     modal.innerHTML = switchDetailHtml(dev);
     wireSwitchDetail(dev);
     verifyLiveInBackground(dev, () => { modal.innerHTML = switchDetailHtml(dev); wireSwitchDetail(dev); });
+  } else if (hasThSensor(dev)){
+    openThHistory(dev); // v1.45: ເຊັນເຊີອຸນຫະພູມ → ໜ້າປະຫວັດເລີຍ
   } else {
     modal.innerHTML = readonlyDetailHtml(dev);
   }
@@ -2389,7 +2421,7 @@ function acDetailHtml(dev){
       <div class="ac-dial-wrap">
         ${acDialSvg(frac, isOn)}
         <div class="ac-dial-face">
-          <div class="ac-indoor" id="acIndoor">${room ? 'ໃນຫ້ອງ ' + room + '°C' : ''}</div>
+          <div class="ac-indoor ${room ? 'clickable' : ''}" id="acIndoor" title="ເບິ່ງປະຫວັດອຸນຫະພູມ">${room ? 'ໃນຫ້ອງ ' + room + '°C 📈' : ''}</div>
           <div class="ac-big" id="acBig">${a.temp}<span>°C</span></div>
           <div class="ac-sub" id="acSub">${isOn ? AC_MODE_LABELS[a.mode] + ' · ' + AC_FAN_LABELS[a.fan] : 'ປິດຢູ່'}</div>
         </div>
@@ -2434,6 +2466,7 @@ function acDetailHtml(dev){
       </div>
     </div>
     <div class="modal-actions">
+      ${acRoomSensorDev() ? '<button class="btn" id="acThBtn">📈 ປະຫວັດ</button>' : ''}
       <button class="btn" id="deviceScheduleBtn">⏰ ຕັ້ງເວລາ</button>
       <button class="btn" id="closeDetailBtn">ປິດ</button>
     </div>
@@ -2446,6 +2479,10 @@ function wireAcDetail(dev){
   // v1.39: ປຸ່ມ "⏰ ຕັ້ງເວລາ" ໃນໜ້າແອ (ຄືກັບສະວິດ/ໄຟ ໃນ v1.38)
   const acSchedBtn = modal.querySelector('#deviceScheduleBtn');
   if (acSchedBtn) acSchedBtn.addEventListener('click', () => goToRulesPage(dev.id));
+  // v1.45: ປະຫວັດອຸນຫະພູມຫ້ອງ (ກົດ "ໃນຫ້ອງ xx°C 📈" ຫຼື ປຸ່ມ "📈 ປະຫວັດ")
+  const openTh = () => { const sd = acRoomSensorDev(); if (sd) openThHistory(sd, dev.tuya_device_id); };
+  const thBtn = modal.querySelector('#acThBtn'); if (thBtn) thBtn.addEventListener('click', openTh);
+  const indoorEl = modal.querySelector('#acIndoor'); if (indoorEl) indoorEl.addEventListener('click', openTh);
 
   // ສຳເນົາສະຖານະມາເກັບໄວ້ໃນໜ້ານີ້ ແກ້ໄຂແລ້ວຄ່ອຍສົ່ງທັງກ້ອນ
   let ac = acStateOf(dev);
@@ -2571,7 +2608,7 @@ function wireAcDetail(dev){
   activeDetailLiveUpdate = () => {
     const room = acRoomTemp();
     const el = $('#acIndoor');
-    if (el) el.textContent = room ? ('ໃນຫ້ອງ ' + room + '°C') : '';
+    if (el) el.textContent = room ? ('ໃນຫ້ອງ ' + room + '°C 📈') : '';
     if (!sendTimer){
       const fresh = acStateOf(dev);
       if (JSON.stringify(fresh) !== JSON.stringify(ac)){
@@ -2582,6 +2619,304 @@ function wireAcDetail(dev){
   };
 
   paint();
+}
+
+// =====================================================================
+// v1.45: ປະຫວັດອຸນຫະພູມ / ຄວາມຊຸ່ມ (ຄື Smart Life ແຕ່ເລືອກຊ່ວງເວລາ + ລາຍນາທີ/ຊົ່ວໂມງ/ວັນ ໄດ້)
+// ແຫຼ່ງຂໍ້ມູນ: iot_device_status_log — Bridge ບັນທຶກທຸກຄັ້ງທີ່ຄ່າເຊັນເຊີປ່ຽນ (ມີຕັ້ງແຕ່ 30/08)
+// ຄ່າບັນທຶກສະເພາະຕອນປ່ຽນ → ແຕ່ລະນາທີໃຊ້ຄ່າຫຼ້າສຸດກ່ອນໜ້ານັ້ນ (carry forward), ລາຍຊົ່ວໂມງ/ວັນ = ສະເລ່ຍ
+// ຂອງທຸກນາທີໃນຊ່ວງນັ້ນ (ພ້ອມຕ່ຳສຸດ/ສູງສຸດ). ອຸນຫະພູມ ແລະ ຄວາມຊຸ່ມ ແຍກ 2 ກຣາບ (ຫ້າມໃຊ້ 2 ແກນ y)
+// =====================================================================
+function thReadingOf(st){
+  st = st || {};
+  const t = typeof st.va_temperature === 'number' ? st.va_temperature / 10
+          : (typeof st.temp_current === 'number' ? st.temp_current / 10 : null);
+  const h = typeof st.va_humidity === 'number' ? st.va_humidity
+          : (typeof st.humidity_current === 'number' ? st.humidity_current : null);
+  return { t, h };
+}
+function hasThSensor(dev){
+  const r = thReadingOf(dev && dev.current_state);
+  return r.t !== null || r.h !== null;
+}
+const TH_RANGES = [
+  { key:'1h',  label:'1 ຊມ', ms: 3600e3,      res:['min'],               def:'min'  },
+  { key:'6h',  label:'6 ຊມ', ms: 6*3600e3,    res:['min','hour'],        def:'min'  },
+  { key:'24h', label:'24 ຊມ', ms: 24*3600e3,  res:['min','hour'],        def:'hour' },
+  { key:'7d',  label:'7 ມື້',     ms: 7*86400e3,   res:['hour','day'],        def:'hour' },
+  { key:'30d', label:'30 ມື້',    ms: 30*86400e3,  res:['hour','day'],        def:'day'  },
+];
+const TH_RES = { min:{ label:'ລາຍນາທີ', ms:60e3 }, hour:{ label:'ລາຍຊົ່ວໂມງ', ms:3600e3 }, day:{ label:'ລາຍວັນ', ms:86400e3 } };
+const VTE_OFFSET_MS = 7 * 3600e3;
+function thAlign(ms, stepMs){ return Math.floor((ms + VTE_OFFSET_MS) / stepMs) * stepMs - VTE_OFFSET_MS; }
+function thFmt(ms, withDate){
+  const d = new Date(ms + VTE_OFFSET_MS);
+  const p = (n) => String(n).padStart(2, '0');
+  const hm = p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+  return withDate ? (p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + (withDate === 'date' ? '' : ' ' + hm)) : hm;
+}
+
+async function fetchThLog(devId, fromMs){
+  const fromIso = new Date(fromMs).toISOString();
+  const rows = [];
+  const prev = await sb.from('iot_device_status_log').select('new_state,created_at')
+    .eq('device_id', devId).lt('created_at', fromIso).order('created_at', { ascending:false }).limit(1).maybeSingle();
+  if (prev.data) rows.push(prev.data);
+  for (let off = 0; off < 60000; off += 1000){
+    const { data, error } = await sb.from('iot_device_status_log').select('new_state,created_at')
+      .eq('device_id', devId).gte('created_at', fromIso).order('created_at', { ascending:true }).range(off, off + 999);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return rows.map(r => Object.assign({ ms: Date.parse(r.created_at) }, thReadingOf(r.new_state)))
+             .sort((a, b) => a.ms - b.ms);
+}
+
+function thBuckets(points, fromMs, toMs, stepMs){
+  const out = [];
+  let i = 0, curT = null, curH = null;
+  for (let b = fromMs; b < toMs; b += stepMs){
+    const end = Math.min(b + stepMs, toMs);
+    const acc = { tS:0, tN:0, tMin:Infinity, tMax:-Infinity, hS:0, hN:0, hMin:Infinity, hMax:-Infinity };
+    for (let m = b; m < end; m += 60e3){
+      while (i < points.length && points[i].ms <= m + 59999){
+        if (points[i].t !== null) curT = points[i].t;
+        if (points[i].h !== null) curH = points[i].h;
+        i++;
+      }
+      if (curT !== null){ acc.tS += curT; acc.tN++; acc.tMin = Math.min(acc.tMin, curT); acc.tMax = Math.max(acc.tMax, curT); }
+      if (curH !== null){ acc.hS += curH; acc.hN++; acc.hMin = Math.min(acc.hMin, curH); acc.hMax = Math.max(acc.hMax, curH); }
+    }
+    out.push({
+      ms: b, end,
+      t: acc.tN ? acc.tS / acc.tN : null, tMin: acc.tN ? acc.tMin : null, tMax: acc.tN ? acc.tMax : null,
+      h: acc.hN ? acc.hS / acc.hN : null, hMin: acc.hN ? acc.hMin : null, hMax: acc.hN ? acc.hMax : null,
+    });
+  }
+  return out;
+}
+
+function thChartSvg(buckets, key, color, fmtVal, showDate){
+  const W = 340, H = 150, L = 34, R = 10, T = 14, B = 20;
+  const vals = buckets.map(b => b[key]).filter(v => v !== null);
+  if (!vals.length) return { svg: `<div class="hint">ບໍ່ມີຂໍ້ມູນໃນຊ່ວງນີ້</div>`, xOf: null };
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = key === 't' ? 0.5 : 2;
+  lo = Math.floor(lo - pad); hi = Math.ceil(hi + pad);
+  if (hi - lo < 2){ hi += 1; lo -= 1; }
+  const n = buckets.length;
+  const xOf = (idx) => L + (n <= 1 ? (W - L - R) / 2 : idx * (W - L - R) / (n - 1));
+  const yOf = (v) => T + (hi - v) * (H - T - B) / (hi - lo);
+  // ເສັ້ນ (ຂາດຕອນບໍ່ມີຂໍ້ມູນ) + ພື້ນຈາງໆ
+  let d = '', area = '', segStart = null, lastX = null;
+  buckets.forEach((b, idx) => {
+    const v = b[key];
+    if (v === null){
+      if (segStart !== null){ area += `L${lastX},${H - B}L${segStart},${H - B}Z`; segStart = null; }
+      return;
+    }
+    const x = xOf(idx).toFixed(1), y = yOf(v).toFixed(1);
+    if (segStart === null){ d += `M${x},${y}`; area += `M${x},${y}`; segStart = x; }
+    else { d += `L${x},${y}`; area += `L${x},${y}`; }
+    lastX = x;
+  });
+  if (segStart !== null) area += `L${lastX},${H - B}L${segStart},${H - B}Z`;
+  // ເສັ້ນຕາລາງ 3 ເສັ້ນ
+  const ticks = [lo, (lo + hi) / 2, hi];
+  const grid = ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${yOf(v)}" y2="${yOf(v)}"/>
+      <text class="axis" x="${L - 6}" y="${yOf(v) + 3}" text-anchor="end">${fmtVal(v, true)}</text>`).join('');
+  // ປ້າຍແກນ x 5 ຈຸດ
+  const xt = [];
+  // ຫຼາຍມື້: ປ້າຍສະເພາະວັນທີ (ບໍ່ໃຫ້ຂໍ້ຄວາມຊ້ອນກັນ), ເວລາລະອຽດເບິ່ງໃນ tooltip/ຕາຕະລາງ
+  const nt = showDate ? 4 : 5;
+  for (let k = 0; k < nt; k++){
+    const idx = Math.round(k * (n - 1) / (nt - 1));
+    if (xt.some(t => t.idx === idx)) continue;
+    xt.push({ idx, label: thFmt(buckets[idx].ms, showDate ? 'date' : false) });
+  }
+  const xLabels = xt.map((t, k) => `<text class="axis" x="${xOf(t.idx)}" y="${H - 4}"
+      text-anchor="${k === 0 ? 'start' : (k === xt.length - 1 ? 'end' : 'middle')}">${t.label}</text>`).join('');
+  // ປ້າຍຄ່າຫຼ້າສຸດທີ່ປາຍເສັ້ນ (direct label ຈຸດດຽວ)
+  let lastIdx = -1;
+  for (let k = n - 1; k >= 0; k--){ if (buckets[k][key] !== null){ lastIdx = k; break; } }
+  const endDot = lastIdx >= 0 ? `<circle cx="${xOf(lastIdx)}" cy="${yOf(buckets[lastIdx][key])}" r="4" fill="${color}" stroke="var(--bg-elev)" stroke-width="2"/>` : '';
+  const gid = 'thg' + key;
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H}" role="img">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${color}" stop-opacity=".22"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${grid}${xLabels}
+      <path d="${area}" fill="url(#${gid})" stroke="none"/>
+      <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${endDot}
+      <line class="cross" data-cross x1="0" x2="0" y1="${T}" y2="${H - B}" style="display:none"/>
+      <circle data-hdot r="5" fill="${color}" stroke="var(--bg-elev)" stroke-width="2" style="display:none"/>
+      <rect data-hit x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent"/>
+    </svg>`;
+  return { svg, xOf, yOf, W, L, R, n };
+}
+
+let thToken = 0;
+function openThHistory(sensorDev, backToTuyaId){
+  if (activeGateStopTick){ activeGateStopTick(); activeGateStopTick = null; }
+  activeDetailDeviceId = sensorDev.id;  // realtime ຂອງເຊັນເຊີ ອັບເດດ "ດຽວນີ້" ໄດ້
+  activeDetailLiveUpdate = () => { const r = thReadingOf(sensorDev.current_state); paintNow(r); };
+  activeGateSensorRefresh = null;
+  document.getElementById('deviceOverlay').classList.add('show');
+  const modal = document.getElementById('deviceModal');
+  let range = TH_RANGES[2], res = range.def;
+
+  modal.innerHTML = `
+    <div class="detail-head">
+      <div class="device-ic">🌡️</div>
+      <div>
+        <h2 style="margin:0;">ອຸນຫະພູມ ແລະ ຄວາມຊຸ່ມ</h2>
+        <div class="modal-sub" style="margin:2px 0 0;">${escapeHtml(sensorDev.name)} — ${escapeHtml(sensorDev.room || '')}</div>
+      </div>
+    </div>
+    <div class="th-chips" id="thRanges">${TH_RANGES.map(r => `<button class="th-chip" data-range="${r.key}">${r.label}</button>`).join('')}</div>
+    <div class="th-chips" id="thRes">${Object.keys(TH_RES).map(k => `<button class="th-chip" data-res="${k}">${TH_RES[k].label}</button>`).join('')}</div>
+    <div id="thBody"><div class="hint">ກຳລັງໂຫຼດ...</div></div>
+    <div class="modal-actions">
+      ${backToTuyaId ? '<button class="btn" id="thBackBtn">← ກັບໜ້າແອ</button>' : ''}
+      <button class="btn" id="closeDetailBtn">ປິດ</button>
+    </div>`;
+  modal.querySelector('#closeDetailBtn').addEventListener('click', closeDeviceDetail);
+  const back = modal.querySelector('#thBackBtn');
+  if (back) back.addEventListener('click', () => openDeviceDetail(backToTuyaId));
+
+  function paintChips(){
+    modal.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', b.dataset.range === range.key));
+    modal.querySelectorAll('[data-res]').forEach(b => {
+      b.classList.toggle('active', b.dataset.res === res);
+      b.disabled = !range.res.includes(b.dataset.res);
+    });
+  }
+  function paintNow(r){
+    const tn = modal.querySelector('#thNowT'); if (tn && r.t !== null) tn.textContent = r.t.toFixed(1) + '°C';
+    const hn = modal.querySelector('#thNowH'); if (hn && r.h !== null) hn.textContent = Math.round(r.h) + '%';
+  }
+  modal.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
+    range = TH_RANGES.find(r => r.key === b.dataset.range);
+    res = range.def; load();
+  }));
+  modal.querySelectorAll('[data-res]').forEach(b => b.addEventListener('click', () => {
+    if (b.disabled) return; res = b.dataset.res; load();
+  }));
+
+  async function load(){
+    paintChips();
+    const my = ++thToken;
+    const body = modal.querySelector('#thBody');
+    body.innerHTML = '<div class="hint">ກຳລັງໂຫຼດ...</div>';
+    try{
+      const stepMs = TH_RES[res].ms;
+      const now = Date.now();
+      const fromMs = thAlign(now - range.ms, stepMs);
+      const pts = await fetchThLog(sensorDev.id, fromMs);
+      if (my !== thToken || activeDetailDeviceId !== sensorDev.id) return; // ປ່ຽນຊ່ວງ/ປິດໜ້າໄປແລ້ວ
+      render(thBuckets(pts, fromMs, now, stepMs));
+    }catch(e){
+      if (my === thToken) body.innerHTML = `<div class="empty">ໂຫຼດລົ້ມເຫຼວ: ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+  function render(buckets){
+    const body = modal.querySelector('#thBody');
+    const showDate = range.ms > 86400e3 ? (res === 'day' ? 'date' : 'datetime') : false;
+    const fmtT = (v, axis) => axis ? String(Math.round(v)) : v.toFixed(1) + '°C';
+    const fmtH = (v) => Math.round(v) + '%';
+    const css = getComputedStyle(document.documentElement);
+    const cT = css.getPropertyValue('--th-temp').trim() || '#e76624';
+    const cH = css.getPropertyValue('--th-hum').trim() || '#338ced';
+    const now = thReadingOf(sensorDev.current_state);
+    const stat = (key, fmt) => {
+      const v = buckets.filter(b => b[key] !== null);
+      if (!v.length) return 'ບໍ່ມີຂໍ້ມູນ';
+      const mn = Math.min(...v.map(b => b[key + 'Min'])), mx = Math.max(...v.map(b => b[key + 'Max']));
+      const avg = v.reduce((s, b) => s + b[key], 0) / v.length;
+      return `ຕ່ຳສຸດ ${fmt(mn)} · ສູງສຸດ ${fmt(mx)} · ສະເລ່ຍ ${fmt(avg)}`;
+    };
+    const chT = thChartSvg(buckets, 't', cT, fmtT, showDate);
+    const chH = thChartSvg(buckets, 'h', cH, fmtH, showDate);
+    const when = (b) => {
+      if (res === 'min') return thFmt(b.ms, showDate ? 'datetime' : false);
+      if (res === 'hour') return thFmt(b.ms, showDate ? 'datetime' : false) + '–' + thFmt(b.end, false);
+      return thFmt(b.ms, 'date');
+    };
+    const rows = buckets.slice().reverse().filter(b => b.t !== null || b.h !== null).slice(0, 500);
+    body.innerHTML = `
+      <div class="th-block">
+        <div class="th-head"><div class="th-title"><i style="background:${cT}"></i>ອຸນຫະພູມ</div><div class="th-now" id="thNowT">${now.t !== null ? now.t.toFixed(1) + '°C' : '—'}</div></div>
+        <div class="th-stats">${stat('t', v => fmtT(v))}</div>
+        <div class="th-chart" data-key="t">${chT.svg}<div class="th-tip"></div></div>
+      </div>
+      <div class="th-block">
+        <div class="th-head"><div class="th-title"><i style="background:${cH}"></i>ຄວາມຊຸ່ມ</div><div class="th-now" id="thNowH">${now.h !== null ? Math.round(now.h) + '%' : '—'}</div></div>
+        <div class="th-stats">${stat('h', fmtH)}</div>
+        <div class="th-chart" data-key="h">${chH.svg}<div class="th-tip"></div></div>
+      </div>
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer; color:var(--text-dim); font-size:13px;">ສະແດງເປັນຕາຕະລາງ (${TH_RES[res].label}${res === 'min' ? '' : ' — ສະເລ່ຍ'})</summary>
+        <div class="th-table-wrap"><table class="th-table">
+          <thead><tr><th>ເວລາ</th><th>ອຸນຫະພູມ</th><th>ຄວາມຊຸ່ມ</th></tr></thead>
+          <tbody>${rows.map(b => `<tr><td>${when(b)}</td><td>${b.t !== null ? b.t.toFixed(1) + '°C' : '—'}</td><td>${b.h !== null ? Math.round(b.h) + '%' : '—'}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </details>
+      <div class="hint">ຂໍ້ມູນຈາກເຊັນເຊີໃນກ່ອງ Smart IR · ບັນທຶກທຸກຄັ້ງທີ່ຄ່າປ່ຽນ</div>`;
+
+    // crosshair + tooltip — ຂີ່ກັນທັງ 2 ກຣາບ (ຈຸດເວລາດຽວກັນ)
+    const charts = [
+      { el: body.querySelector('.th-chart[data-key="t"]'), ch: chT, key:'t', fmt: (v) => fmtT(v) },
+      { el: body.querySelector('.th-chart[data-key="h"]'), ch: chH, key:'h', fmt: fmtH },
+    ].filter(c => c.ch.xOf);
+    function show(idx){
+      const b = buckets[idx];
+      charts.forEach(c => {
+        const svg = c.el.querySelector('svg'), tip = c.el.querySelector('.th-tip');
+        const cross = svg.querySelector('[data-cross]'), dot = svg.querySelector('[data-hdot]');
+        const x = c.ch.xOf(idx);
+        cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.style.display = '';
+        const v = b[c.key];
+        if (v === null){ dot.style.display = 'none'; tip.style.display = 'none'; return; }
+        dot.setAttribute('cx', x); dot.setAttribute('cy', c.ch.yOf(v)); dot.style.display = '';
+        const range2 = res !== 'min' && b[c.key + 'Min'] !== b[c.key + 'Max'] ? ` (${c.fmt(b[c.key + 'Min'])}–${c.fmt(b[c.key + 'Max'])})` : '';
+        tip.textContent = `${when(b)} · ${res === 'min' ? '' : 'ສະເລ່ຍ '}${c.fmt(v)}${range2}`;
+        tip.style.display = 'block';
+        const px = x / c.ch.W * c.el.clientWidth;
+        tip.style.left = Math.max(70, Math.min(c.el.clientWidth - 70, px)) + 'px';
+      });
+    }
+    function hide(){
+      charts.forEach(c => {
+        const svg = c.el.querySelector('svg');
+        svg.querySelector('[data-cross]').style.display = 'none';
+        svg.querySelector('[data-hdot]').style.display = 'none';
+        c.el.querySelector('.th-tip').style.display = 'none';
+      });
+    }
+    charts.forEach(c => {
+      const hit = c.el.querySelector('[data-hit]');
+      const onMove = (ev) => {
+        const p = ev.touches ? ev.touches[0] : ev;
+        const r = c.el.querySelector('svg').getBoundingClientRect();
+        const vx = (p.clientX - r.left) / r.width * c.ch.W;
+        const n = buckets.length;
+        const idx = Math.max(0, Math.min(n - 1, Math.round((vx - c.ch.L) / ((c.ch.W - c.ch.L - c.ch.R) / Math.max(1, n - 1)))));
+        show(idx);
+      };
+      hit.addEventListener('pointermove', onMove);
+      hit.addEventListener('pointerdown', onMove);
+      hit.addEventListener('touchmove', onMove, { passive:true });
+      hit.addEventListener('pointerleave', hide);
+    });
+  }
+  load();
+}
+function acRoomSensorDev(){
+  return (STATE.devices || []).find(d => d.tuya_device_id === AC_ROOM_SENSOR_ID) || null;
 }
 
 function readonlyDetailHtml(dev){
